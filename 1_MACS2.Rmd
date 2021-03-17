@@ -2,14 +2,14 @@
 title: "Neural Crest single-cell ATAC-Seq Timecourse"
 output: html_notebook
 ---
-## Part 1: Recalling Peaks with MACS2
-While 10X called peaks is sufficient to cluster cells relatively well, we would like to stick to MACS2 for our peak-calling. In this vingette, we import the 10X data and call peaks using MACS2 for each cluster of cells. We then re-quantify signal at these peaks.
+## Part 1: Recalling Peaks with MACS3
+While 10X called peaks is sufficient to cluster cells relatively well, we would like to stick to MACS2 for our peak-calling. In this vingette, we import our 10X data and re-call peaks using MACS3 for each cluster of cells. This increases the sensitivity of peak calling. We then re-quantify signal at these peaks. New updates in Seurat 4.0/ Signac 1.1 allow us to do this ALL within R.
 
 
 ### Importing raw 10X data
 There were three different rounds of sequencing for this project, but we won't cover processing data via the 10X pipeline. We start at the output of cellranger-atac count for each sample/timepoint.
 
-Generally, this follows the Mouse seurat Vignette
+Generally, this follows the Mouse Brain Seurat Vignette
 
 https://satijalab.org/signac/articles/mouse_brain_vignette.html
 
@@ -22,11 +22,9 @@ HH14_dir <- "/data/Austin/10XscATAC/HH14_10xscATAC_Lane1_Lane2/outs/"
 HH16_dir <- "/data/Austin/10XscATAC/HH16_10xscATAC_Lane1/outs/"
 HH18_dir <- "/data/Austin/10XscATAC/HH18_10xscATAC_Lane1/outs/"
 libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
-
 ```
 
 ### Libraries and Annotation
-The prep_sinto function is used to create cell_cluster text files, which will then be used to filter the barcodes into bams for MACS2.
 ```{r Loading Libraries}
 library(Seurat)
 library(Signac)
@@ -40,7 +38,7 @@ library(readr)
 library(BSgenome.Ggallus.ENSEMBL.galGal6)
 library(future)
 plan("multisession", workers = 62)
-options(future.globals.maxSize = 200 * 1024 ^ 3) # for 200 Gb RAM
+options(future.globals.maxSize = 400 * 1024 ^ 3) # for 400 Gb RAM
 
 # Setup Annotation
 ah <- AnnotationHub()
@@ -48,26 +46,28 @@ qr <- query(ah, c("EnsDb", "gallus gallus", "101"))
 EnsDb_gg6 <- ah[["AH83209"]]
 # extract gene annotations from EnsDb
 annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
-
-prep_sinto <- function(sr, data_dir){
-  write_delim(sr@meta.data[,c("barcode","seurat_clusters")], path = paste0(data_dir,"cell_clusters.txt"), col_names = F, delim = "\t")
-}
 ```
 
 ### Sample processing
 Seven timepoints, repeated for each timepoint.
-Rough cutoff for cell filtering. Finer cutoffs will be performed after re-quantification at MACS2 peaks.
+Rough cutoff for cell filtering. Finer cutoffs will be performed after re-quantification at MACS3 peaks.
 ```{r Process Each Sample}
+count <- 0
+
 for (dir in c(HH6_dir, HH8_dir, HH10_dir, HH12_dir,
               HH14_dir, HH16_dir, HH18_dir)){
+  
+count <- count + 1  
 counts <- readMM(paste0(dir,"filtered_peak_bc_matrix/matrix.mtx"))
 barcodes <- read_delim(paste0(dir,"filtered_peak_bc_matrix/barcodes.tsv"), delim = "\t", col_names = F)
 colnames(counts) <- barcodes$X1
+
 assay <- CreateChromatinAssay(
   counts = counts,
   ranges = import.bed(paste0(dir,"filtered_peak_bc_matrix/peaks.bed")),
   fragments = paste0(dir,"fragments.tsv.gz"),
-  annotation = annotations
+  annotation = annotations,
+  genome = seqinfo(EnsDb_gg6)
 )
 
 meta <- read_csv(paste0(dir,"singlecell.csv"))
@@ -137,21 +137,19 @@ seurat <- FindClusters(
 
 DimPlot(object = seurat, label = TRUE, reduction = "umap") + NoLegend()
 
-prep_sinto(seurat, dir)
+# Call peaks with new CallPeaks Signac Function
+peaks <- CallPeaks(seurat,
+                   group.by = "seurat_clusters",
+                   macs2.path = "/home/ash274/miniconda3/envs/macs3/bin/macs3",
+                   effective.genome.size = 1218492533,
+                   outdir = paste0(dir,"macs3"),
+                   extsize = 73, shift = 37,
+                   additional.args = "--nomodel",
+                   cleanup = F,
+                   name = libraries[count])
+saveRDS(peaks, file = paste0(dir, "macs3/", libraries[count],"_combined_peaks.RDS"))
+
 }
+
+sessionInfo()
 ```
-
-```{bash Calling MACS per cluster, eval=FALSE}
-# Run in tmux/screen.
-# ~/local_git/NC_scATAC_Redux/Run_Sinto_and_MACS.sh
-```
-
-
-
-
-
-
-
-
-
-
