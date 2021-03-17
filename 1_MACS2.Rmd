@@ -1,0 +1,157 @@
+---
+title: "Neural Crest single-cell ATAC-Seq Timecourse"
+output: html_notebook
+---
+## Part 1: Recalling Peaks with MACS2
+While 10X called peaks is sufficient to cluster cells relatively well, we would like to stick to MACS2 for our peak-calling. In this vingette, we import the 10X data and call peaks using MACS2 for each cluster of cells. We then re-quantify signal at these peaks.
+
+
+### Importing raw 10X data
+There were three different rounds of sequencing for this project, but we won't cover processing data via the 10X pipeline. We start at the output of cellranger-atac count for each sample/timepoint.
+
+Generally, this follows the Mouse seurat Vignette
+
+https://satijalab.org/signac/articles/mouse_brain_vignette.html
+
+```{r Define directories}
+HH6_dir <- "/data/Austin/10XscATAC/HH6_10xscATAC_Lane1/outs/"
+HH8_dir <- "/data/Austin/10XscATAC/HH8_10xscATAC_Lane1_Lane2/outs/"
+HH10_dir <- "/data/Austin/10XscATAC/HH10_10xscATAC_Lane1_Lane2/outs/"
+HH12_dir <- "/data/Austin/10XscATAC/HH12_10xscATAC_Lane1_Lane2/outs/"
+HH14_dir <- "/data/Austin/10XscATAC/HH14_10xscATAC_Lane1_Lane2/outs/"
+HH16_dir <- "/data/Austin/10XscATAC/HH16_10xscATAC_Lane1/outs/"
+HH18_dir <- "/data/Austin/10XscATAC/HH18_10xscATAC_Lane1/outs/"
+libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
+
+```
+
+### Libraries and Annotation
+The prep_sinto function is used to create cell_cluster text files, which will then be used to filter the barcodes into bams for MACS2.
+```{r Loading Libraries}
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(AnnotationHub)
+library(ggplot2)
+library(patchwork)
+library(Matrix)
+library(rtracklayer)
+library(readr)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(future)
+plan("multisession", workers = 62)
+options(future.globals.maxSize = 200 * 1024 ^ 3) # for 200 Gb RAM
+
+# Setup Annotation
+ah <- AnnotationHub()
+qr <- query(ah, c("EnsDb", "gallus gallus", "101"))
+EnsDb_gg6 <- ah[["AH83209"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+
+prep_sinto <- function(sr, data_dir){
+  write_delim(sr@meta.data[,c("barcode","seurat_clusters")], path = paste0(data_dir,"cell_clusters.txt"), col_names = F, delim = "\t")
+}
+```
+
+### Sample processing
+Seven timepoints, repeated for each timepoint.
+Rough cutoff for cell filtering. Finer cutoffs will be performed after re-quantification at MACS2 peaks.
+```{r Process Each Sample}
+for (dir in c(HH6_dir, HH8_dir, HH10_dir, HH12_dir,
+              HH14_dir, HH16_dir, HH18_dir)){
+counts <- readMM(paste0(dir,"filtered_peak_bc_matrix/matrix.mtx"))
+barcodes <- read_delim(paste0(dir,"filtered_peak_bc_matrix/barcodes.tsv"), delim = "\t", col_names = F)
+colnames(counts) <- barcodes$X1
+assay <- CreateChromatinAssay(
+  counts = counts,
+  ranges = import.bed(paste0(dir,"filtered_peak_bc_matrix/peaks.bed")),
+  fragments = paste0(dir,"fragments.tsv.gz"),
+  annotation = annotations
+)
+
+meta <- read_csv(paste0(dir,"singlecell.csv"))
+meta <- as.data.frame(meta[meta$barcode %in% barcodes$X1,])
+rownames(meta) <- meta$barcode
+
+seurat <- CreateSeuratObject(
+  counts = assay,
+  assay = 'peaks',
+  project = 'ATAC',
+  meta.data = meta
+)
+
+seurat <- NucleosomeSignal(seurat)
+
+seurat$nucleosome_group <- ifelse(seurat$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+FragmentHistogram(object = seurat, group.by = 'nucleosome_group', region = '1-1-100000')
+
+seurat <- TSSEnrichment(seurat, fast = FALSE)
+
+seurat$high.tss <- ifelse(seurat$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(seurat, group.by = 'high.tss') + NoLegend()
+
+seurat$pct_reads_in_peaks <- seurat$peak_region_fragments / seurat$passed_filters * 100
+
+VlnPlot(
+  object = seurat,
+  features = c('pct_reads_in_peaks', 'peak_region_fragments',
+               'TSS.enrichment', 'nucleosome_signal'),
+  pt.size = 0.1,
+  ncol = 5
+)
+
+seurat <- subset(
+  x = seurat,
+  subset = peak_region_fragments > 1250 &
+    peak_region_fragments < 100000 &
+    pct_reads_in_peaks > 40 &
+    nucleosome_signal < 4 &
+    TSS.enrichment > 2
+)
+
+# Normalization and Clustering
+seurat <- BinarizeCounts(seurat)
+seurat <- RunTFIDF(seurat)
+seurat <- FindTopFeatures(seurat, min.cutoff = 'q20')
+seurat <- RunSVD(object = seurat)
+DepthCor(seurat)
+
+seurat <- RunUMAP(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+seurat <- FindNeighbors(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+seurat <- FindClusters(
+  object = seurat,
+  algorithm = 2,
+  resolution = 0.5,
+  verbose = FALSE
+)
+
+
+DimPlot(object = seurat, label = TRUE, reduction = "umap") + NoLegend()
+
+prep_sinto(seurat, dir)
+}
+```
+
+```{bash Calling MACS per cluster, eval=FALSE}
+# Run in tmux/screen.
+# ~/local_git/NC_scATAC_Redux/Run_Sinto_and_MACS.sh
+```
+
+
+
+
+
+
+
+
+
+

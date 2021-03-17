@@ -1,0 +1,208 @@
+---
+title: "Neural Crest single-cell ATAC-Seq Timecourse"
+output: html_notebook
+---
+
+## Part 3: Harmonized Seurat
+
+Let's start by loading the required libraries and annotation.
+```{r message=FALSE, warning=TRUE}
+Sys.setenv(LD_LIBRARY_PATH = "/opt/R/4.0.2/lib/R/lib::/lib:/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/jvm/java-11-openjdk-amd64/lib/server:/home/ash274/miniconda3/envs/py37/lib")
+
+library(harmony)
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(AnnotationHub)
+library(ggplot2)
+library(patchwork)
+library(Matrix)
+library(rtracklayer)
+library(readr)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(future)
+library(qdapTools)
+library(stringr)
+library(SeuratDisk)
+library(loomR)
+plan("multisession", workers = 62)
+options(future.globals.maxSize = 100 * 1024 ^ 3) # for 100 Gb RAM
+
+# Setup Annotation
+ah <- AnnotationHub()
+#qr <- query(ah, c("EnsDb", "gallus gallus", "101"))
+EnsDb_gg6 <- ah[["AH83209"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+```
+
+```{r}
+dir <- "/data/Austin/10XscATAC/10xscATAC_q0005Peaks/outs/"
+counts <- readMM(paste0(dir,"filtered_peak_bc_matrix/matrix.mtx"))
+barcodes <- read_delim(paste0(dir,"filtered_peak_bc_matrix/barcodes.tsv"), delim = "\t", col_names = F)
+colnames(counts) <- barcodes$X1
+assay <- CreateChromatinAssay(
+  counts = counts,
+  ranges = import.bed(paste0(dir,"filtered_peak_bc_matrix/peaks.bed")),
+  fragments = paste0(dir,"fragments.tsv.gz"),
+  annotation = annotations
+)
+
+meta <- read_csv(paste0(dir,"singlecell.csv"))
+meta <- as.data.frame(meta[meta$barcode %in% barcodes$X1,])
+rownames(meta) <- meta$barcode
+
+seurat <- CreateSeuratObject(
+  counts = assay,
+  assay = 'peaks',
+  project = 'ATAC',
+  meta.data = meta
+)
+
+rm(counts)
+
+bc_to_time <- data.frame(barcode = c("1","2","3","4","5","6","7"),
+           timepoint =c ("6","8","10","12","14","16","18"))
+seurat@meta.data$timepoint <- lookup(str_split(seurat$barcode, pattern = "-", n = 2, simplify = T)[,2], key.match = bc_to_time)
+bc_to_batch <- data.frame(barcode = c("1","2","3","4","5","6","7"),
+           timepoint =c ("batch3","batch2","batch2","batch1","batch2","batch2","batch3"))
+seurat@meta.data$batch <- lookup(str_split(seurat$barcode, pattern = "-", n = 2, simplify = T)[,2], key.match = bc_to_batch)
+
+seurat <- NucleosomeSignal(seurat)
+
+seurat$nucleosome_group <- ifelse(seurat$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+FragmentHistogram(object = seurat, group.by = 'nucleosome_group', region = '1-1-100000')
+
+seurat <- TSSEnrichment(seurat, fast = FALSE)
+
+seurat$high.tss <- ifelse(seurat$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(seurat, group.by = 'high.tss') + NoLegend()
+
+seurat$pct_reads_in_peaks <- seurat$peak_region_fragments / seurat$passed_filters * 100
+
+VlnPlot(
+  object = seurat,
+  features = c('pct_reads_in_peaks', 'peak_region_fragments',
+               'TSS.enrichment', 'nucleosome_signal'),
+  pt.size = 0.1,
+  ncol = 5
+)
+
+saveRDS(seurat, file = "tmp_seurat.RDS", compress = F)
+```
+
+Trying to use loom as an intermediate to work around issues with SCTransform's memory requirement.
+```{r}
+seurat <- readRDS("tmp_seurat.RDS")
+seurat <- BinarizeCounts(seurat)
+#seurat <- FindVariableFeatures(seurat)
+#seurat <- ScaleData(seurat, vars.to.regress = c("nCount_peaks"))
+#seurat <- RunPCA(seurat, assay = "peaks", approx = T)
+#seurat <- RunHarmony(seurat, group.by.vars = c("batch"), assay.use = "peaks")
+seurat <- RunTFIDF(object = seurat, assay = "peaks")
+seurat <- FindTopFeatures(seurat, min.cutoff = 'q0')
+seurat <- RunSVD(seurat)
+DepthCor(seurat)
+
+seurat <- RunUMAP(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+seurat <- FindNeighbors(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+seurat <- FindClusters(
+  object = seurat,
+  algorithm = 2,
+  resolution = 1.1,
+  verbose = FALSE
+)
+
+
+DimPlot(object = seurat, label = TRUE, reduction = "umap", group.by = "batch") + NoLegend()
+
+# Let's split into different Seurat objects by batch and then integrate?
+b1_seurat <- seurat[,seurat$batch == "batch1"]
+b2_seurat <- seurat[,seurat$batch == "batch2"]
+b3_seurat <- seurat[,seurat$batch == "batch3"]
+
+int_anchors <- FindIntegrationAnchors(object.list = c(b1_seurat, b2_seurat, b3_seurat), scale = F, reduction = "cca")
+
+seurat.integrated <- IntegrateData(anchorset = int_anchors, dims = 1:30)
+```
+
+
+```{r}
+seurat <- readRDS("tmp_seurat.RDS")
+
+# Normalization and Clustering
+seurat <- BinarizeCounts(seurat)
+
+# I'm going to split the data randomly, run SCTransform and then recombine it.
+# Otherwise stupid memory overflow.
+
+rand_cells <- split(sample(seurat@meta.data$barcode),rep(1:7,2267))
+
+
+for (sr in c(split_1, split_2,split_3,split_4,split_5,split_6,split_7)){
+  sr <- SCTransform(sr,
+                      verbose = T,
+                      do.correct.umi = T,
+                      assay = "peaks",
+                      variable.features.n = NULL,
+                      return.only.var.genes = F,
+                      do.scale = T,
+                      do.center = T)
+}
+
+
+seurat <- SCTransform(seurat,
+                      verbose = T,
+                      #vars.to.regress = "peak_region_fragments",
+                      do.correct.umi = F,
+                      assay = "peaks",
+                      variable.features.n = NULL,
+                      return.only.var.genes = T,
+                      do.scale = T,
+                      do.center = T,
+                      conserve.memory = T)
+
+seurat <- RunPCA(seurat, assay = "SCT", approx = T)
+seurat <- RunHarmony(seurat, c("batch"))
+seurat <- RunSVD(object = seurat)
+DepthCor(seurat)
+
+seurat <- RunUMAP(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+seurat <- FindNeighbors(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+seurat <- FindClusters(
+  object = seurat,
+  algorithm = 2,
+  resolution = 1.1,
+  verbose = FALSE
+)
+
+
+DimPlot(object = seurat, label = TRUE, reduction = "umap", group.by = "timepoint") + NoLegend()
+
+# Hold off on subset of depth until after first UMAP.
+#seurat <- subset(
+#  x = seurat,
+#  subset = peak_region_fragments > 1250 &
+#    peak_region_fragments < 100000 &
+#    pct_reads_in_peaks > 40 &
+#    nucleosome_signal < 4 &
+#    TSS.enrichment > 2
+#)
+```
+

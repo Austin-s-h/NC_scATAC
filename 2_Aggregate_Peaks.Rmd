@@ -1,0 +1,72 @@
+---
+title: "Neural Crest single-cell ATAC-Seq Timecourse"
+output: html_notebook
+---
+
+## Part 2: Aggregate Peaks and Cellranger-aggr
+
+We want to find a good peakset that represents the data well. We can use bedtools to overlap peaks, and find the number of times that peak was represented in the data. We don't want to exlude very specific peaks... So instead we will define a q value cutoff. Originally called with < 0.05, we can see the distribution of the peak score.
+
+```{r}
+library(rtracklayer)
+cat_peaks <- read.table("/data/Austin/10XscATAC/MACS2_Peaks/cat_peaks.bed", header = F)
+colnames(cat_peaks) <- c(
+  "chrom",
+  "chromStart",
+  "chromEnd",
+  "name",
+  "score",
+  "strand",
+  "signalValue",
+  "pValue",
+  "qValue",
+  "peak")
+
+# The minimum -log10 qValue is 1.30.
+# What is the distribution of peak qValue's
+summary(cat_peaks$qValue)
+boxplot(cat_peaks$qValue, outline = F)
+
+# Let's try removing peaks with a score less than 4.
+
+# No filtering (q 0.05) - 244,140 after peak metric filters
+# Filter for qValue less than 4 (q 0.0001)
+cat_peaks_filt <- cat_peaks[cat_peaks$qValue > 4,]
+
+# Remove peaks on odd chromosomes.
+cat_peaks_filt <- cat_peaks_filt[cat_peaks_filt$chrom %in% chrs,]
+
+write.table(cat_peaks_filt, "/data/Austin/10XscATAC/MACS2_Peaks/cat_peaks_q0001.bed", sep = "\t", col.names = F, row.names = F, quote = F)
+```
+
+
+We will use bedtools to combine peaks at an overlap distance of ~25bp.
+
+```{bash aggregate peaks, eval=FALSE}
+cd /data/Austin/10XscATAC/MACS2_Peaks
+
+bedtools sort -i cat_peaks_q0001.bed > sorted_peaks_q0001.bed
+bedtools merge -i sorted_peaks_q0001.bed -d 25 -c 1 -o count > merged_peakset_q0001.bed
+```
+
+Let's examine some results of merging with a distance of 25bp
+```{r}
+merged_peakset <- import.bed("/data/Austin/10XscATAC/MACS2_Peaks/merged_peakset_q0001.bed")
+merged_peakset
+
+summary(as.numeric(merged_peakset$name))
+boxplot(as.numeric(merged_peakset$name))
+summary(width(merged_peakset))
+boxplot(width(merged_peakset))
+
+```
+We will use this peakset to call Cellranger-aggr.
+
+```{bash eval=FALSE}
+cellranger-atac aggr --id=10xscATAC_q0005Peaks \
+--csv=/data/Austin/10XscATAC/aggr_NewPeaks.csv \
+--reference=/data/Austin/workdir/genome/galGal6/GRCg6a \
+--nosecondary --normalize=none
+```
+
+In Part 3 we will continue to work with this new merged dataset.

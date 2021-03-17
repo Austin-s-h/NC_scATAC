@@ -1,0 +1,23 @@
+---
+title: "Neural Crest single-cell ATAC-Seq Timecourse"
+output: html_notebook
+---
+
+## Part 0: Project Description
+
+We will try to stick to Seurat-based objects as much as possible, which have provided the most flexibility and integrations. Recent updates to Seurat have also increased interoperability with Monocle3 and other tools. 
+
+There are a total of 3 10X sequencing runs that we have performed.
+Each of them have been summarized using the cellranger-atac pipeline into their respective timepoints.
+
+## Part 1: Recalling peaks with MACS2
+
+Because 10X called peaks are sometimes very large and in order to increase sensitivity to rare peaks, we call peaks using MACS2 for every cluster within every timepoint, and combine all of these peaks into a MACS2 peakset.
+
+## Part 2: Aggregate Peaks and Aggregate
+
+We then aggregate all of our libraries using cellranger-aggr. This allows us to move to one dataset with carried over metadata.
+
+## Part 3: Harmonized Seurat, Dimensionality reduction.
+
+We take our newly aggregated dataset on MACS2 peaks and repeat much of Part 1, this time with Harmony-based integration.
