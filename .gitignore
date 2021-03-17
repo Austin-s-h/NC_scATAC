@@ -1,0 +1,9 @@
+packrat/lib*/
+.Rproj.user
+.RData
+.Rhistory
+.Rprofile
+.ipynb*
+*.loom
+*.RDS
+*.h5Seurat
