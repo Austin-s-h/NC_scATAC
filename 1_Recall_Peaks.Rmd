@@ -49,13 +49,13 @@ annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
 ```
 
 ### Sample processing
-Seven timepoints, repeated for each timepoint.
+Seven timepoints, each processed individually.
 Rough cutoff for cell filtering. Finer cutoffs will be performed after re-quantification at MACS3 peaks.
 ```{r Process Each Sample}
 count <- 0
 
-for (dir in c(HH6_dir, HH8_dir, HH10_dir, HH12_dir,
-              HH14_dir, HH16_dir, HH18_dir)){
+for (dir in c(HH6_dir, HH8_dir, HH10_dir, HH12_dir,HH14_dir, 
+              HH16_dir, HH18_dir)){
   
 count <- count + 1  
 counts <- readMM(paste0(dir,"filtered_peak_bc_matrix/matrix.mtx"))

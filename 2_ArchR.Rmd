@@ -1,0 +1,442 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Using ArchR for some steps due to memory issues in Seurat.
+
+```{r Define directories}
+HH6_dir <- "/data/Austin/10XscATAC/HH6_10xscATAC_Lane1/outs/"
+HH8_dir <- "/data/Austin/10XscATAC/HH8_10xscATAC_Lane1_Lane2/outs/"
+HH10_dir <- "/data/Austin/10XscATAC/HH10_10xscATAC_Lane1_Lane2/outs/"
+HH12_dir <- "/data/Austin/10XscATAC/HH12_10xscATAC_Lane1_Lane2/outs/"
+HH14_dir <- "/data/Austin/10XscATAC/HH14_10xscATAC_Lane1_Lane2/outs/"
+HH16_dir <- "/data/Austin/10XscATAC/HH16_10xscATAC_Lane1/outs/"
+HH18_dir <- "/data/Austin/10XscATAC/HH18_10xscATAC_Lane1/outs/"
+libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
+```
+
+```{r}
+library(ArchR)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(org.Gg.eg.db)
+library(GenomicFeatures)
+library(dplyr)
+library(qdapTools)
+library(plotly)
+addArchRThreads(threads = 62) 
+set.seed(1)
+
+# Make a blacklist for AADN05001427.1
+arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
+# Manually remove noncontigous chromosomes.
+arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
+TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
+```
+
+Now build the Project.
+```{r}
+all_fragments <- list.files(path = "/data/Austin/10XscATAC/ArchR_data/", full.names = T, pattern = "fragments.tsv.gz$")
+names(all_fragments) <- c("HH10","HH12","HH14","HH16","HH18","HH6","HH8")
+
+# Ensure names are matched with fragments!!!
+all_fragments
+
+ArrowFiles <- createArrowFiles(
+  inputFiles = all_fragments,
+  sampleNames = names(all_fragments),
+  geneAnnotation = arch_gg6_genes,
+  genomeAnnotation = arch_gg6,
+  addTileMat = F,
+  minTSS = 3,
+  minFrags = 1000,
+  nChunk = 2,
+  QCDir = "/data/Austin/10XscATAC/ArchR_data/QC",
+  excludeChr = c("MT"),
+  force = T)
+
+projNC <- ArchRProject(
+  ArrowFiles = ArrowFiles, 
+  outputDirectory = "/data/Austin/10XscATAC/ArchR_data",
+  copyArrows = F,
+  geneAnnotation = arch_gg6_genes,
+  genomeAnnotation = arch_gg6)
+```
+
+Let's look at doublet detection
+```{r}
+projNC <- addDoubletScores(
+  projNC,
+  useMatrix = "TileMatrix",
+  k = 10,
+  nTrials = 10, force = T)
+```
+
+Next, we create a peakMatrix to perform dimensionality reduction on.
+
+```{r}
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_save/")
+
+HH6_peaks <- readRDS(file = paste0(HH6_dir, "macs3/HH6_combined_peaks.RDS"))
+HH8_peaks <- readRDS(file = paste0(HH8_dir, "macs3/HH8_combined_peaks.RDS"))
+HH10_peaks <- readRDS(file = paste0(HH10_dir, "macs3/HH10_combined_peaks.RDS"))
+HH12_peaks <- readRDS(file = paste0(HH12_dir, "macs3/HH12_combined_peaks.RDS"))
+HH14_peaks <- readRDS(file = paste0(HH14_dir, "macs3/HH14_combined_peaks.RDS"))
+HH16_peaks <- readRDS(file = paste0(HH16_dir, "macs3/HH16_combined_peaks.RDS"))
+HH18_peaks <- readRDS(file = paste0(HH18_dir, "macs3/HH18_combined_peaks.RDS"))
+
+combined.peaks <- reduce(c(HH6_peaks, HH8_peaks, HH10_peaks,HH12_peaks, HH14_peaks, HH16_peaks, HH18_peaks), drop.empty.ranges = T)
+
+summary(width(combined.peaks))
+
+projNC <- addPeakSet(projNC, peakSet = combined.peaks, force = T)
+
+projNC <- addPeakMatrix(projNC, binarize = T, threads = 8, force = T)
+
+projNC <- addIterativeLSI(
+  projNC, useMatrix = "PeakMatrix",
+  iterations = 4, varFeatures = 30000)
+
+
+projNC$batch <- ifelse(projNC$Sample %in% c("HH8","HH10","HH14","HH16"),
+                       "batch1",
+                       ifelse(projNC$Sample %in% c("HH6","HH18"),
+                              "batch2","batch3"))
+
+projNC <- addHarmony(
+    ArchRProj = projNC,
+    reducedDims = "IterativeLSI",
+    name = "Harmony",
+    groupBy = "batch")
+
+projNC <- addUMAP(
+    ArchRProj = projNC, 
+    reducedDims = "IterativeLSI", 
+    name = "UMAP", 
+    nNeighbors = 30, 
+    minDist = 0.5, 
+    metric = "cosine", force = T, n_components = 2)
+
+projNC <- addUMAP(
+    ArchRProj = projNC, 
+    reducedDims = "IterativeLSI", 
+    name = "UMAP_3d", 
+    nNeighbors = 30, 
+    minDist = 0.5, 
+    metric = "cosine", force = T, n_components = 3)
+
+projNC <- addClusters(
+    input = projNC,
+    reducedDims = "IterativeLSI",
+    method = "Seurat",
+    name = "Clusters",
+    resolution = 0.5, force = T)
+
+# 2D
+p1 <- plotEmbedding(ArchRProj = projNC, colorBy = "cellColData", name = "Sample", embedding = "UMAP", size = 1, baseSize = 16)
+p1
+
+# 3D
+
+df_3d <- getEmbedding(projNC, embedding = "UMAP_3d", returnDF = TRUE)
+
+colnames(df_3d) <- c("UMAP_1","UMAP_2","UMAP_3")
+df_3d$Sample <- projNC$Sample
+df_3d$SeuratClusters <- projNC$Clusters
+df_3d$Pseudotime <- projNC$hour_adj_pseudotime
+
+p1_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Sample, size = I(10)) %>% add_markers()
+p2_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Pseudotime, size = I(10)) %>% add_markers()
+
+
+p2 <- plotEmbedding(ArchRProj = projNC, colorBy = "cellColData", name = "Clusters", embedding = "UMAP")
+p2
+
+plotPDF(p1,p2, name = "Plot-UMAP-Sample-Clusters.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 6)
+```
+The 3D UMAP projections using Iterative LSI are great, similar to Harmony integration via batch in Seurat. I can't quite find the rotation that might be best yet. That's fine, it is more a visual thing we can tweak later.
+
+Next, let's get into Gene Scores with the new ArchR algorithm.
+
+```{r}
+projNC <- addGeneScoreMatrix(
+  projNC, extendUpstream = c(5000, 1e+05),
+  extendDownstream = c(5000,1e+05),
+  geneUpstream = 2000, force = T)
+
+projNC <- addImputeWeights(projNC)
+
+
+markersGS <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "GeneScoreMatrix", 
+    groupBy = "Clusters",
+    bias = c("TSSEnrichment", "log10(nFrags)"),
+    testMethod = "wilcoxon")
+
+markerList <- getMarkers(markersGS, cutOff = "FDR <= 0.01 & Log2FC >= 1.25")
+
+markerDF <- as.data.frame(markerList)
+
+top_genes <- markerDF %>% dplyr::group_by(group_name) %>% dplyr::top_n(10, wt = Log2FC)
+
+markerGenes  <- c(
+    "SOX10", 
+    "TFAP2A", 
+    "PAX7",
+    "PRRX2",
+    "PBX4")
+
+heatmapGS <- plotMarkerHeatmap(
+  seMarker = top_genes, 
+  cutOff = "FDR <= 0.01 & Log2FC >= 1.25", 
+  labelMarkers = markerGenes,
+  transpose = T)
+
+# Heatmap function is currently broken.
+# ComplexHeatmap::draw_heatmap_list(heatmapGS, heatmap_legend_side = "bot", annotation_legend_side = "bot")
+
+# plotPDF(heatmapGS, name = "GeneScores-Marker-Heatmap", width = 8, height = 6, ArchRProj = projNC, addDOC = FALSE)
+
+p3 <- plotEmbedding(
+    ArchRProj = projNC, 
+    colorBy = "GeneScoreMatrix", 
+    name = top_genes$name, rastr = F, sampleCells = NULL, plotAs = "points",
+    embedding = "UMAP",
+    quantCut = c(0.05, 0.9),
+    imputeWeights = getImputeWeights(projNC))
+
+# Let's look at local genome browser
+
+p4 <- plotBrowserTrack(
+    ArchRProj = projNC, 
+    groupBy = "Clusters", 
+    geneSymbol = "PRRX2", 
+    upstream = 50000,
+    downstream = 50000)
+
+grid::grid.newpage()
+grid::grid.draw(p4$PRRX2)
+```
+
+What about motif enrichment? First, let's get differential peaks.
+
+```{r}
+projNC <- addMotifAnnotations(
+  projNC, motifSet = "JASPAR2020",
+  name = "Motif", collection = "CORE")
+
+markersPeaks <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "PeakMatrix", 
+    groupBy = "Clusters",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  testMethod = "wilcoxon")
+
+# This checks binary presence of a TF in a given peakset, but isn't chromvAR
+motifsUp <- peakAnnoEnrichment(
+    seMarker = markersPeaks,
+    ArchRProj = projNC,
+    peakAnnotation = "Motif",
+    cutOff = "FDR <= 0.1 & Log2FC >= 0.5"
+  )
+
+df <- data.frame(TF = rownames(motifsUp), mlog10Padj = assay(motifsUp)[,1])
+df <- df[order(df$mlog10Padj, decreasing = TRUE),]
+df$rank <- seq_len(nrow(df))
+
+ggUp <- ggplot(df, aes(rank, mlog10Padj, color = mlog10Padj)) + 
+  geom_point(size = 1) +
+  ggrepel::geom_label_repel(
+        data = df[rev(seq_len(30)), ], aes(x = rank, y = mlog10Padj, label = TF), 
+        size = 1.5,
+        nudge_x = 2,
+        color = "black"
+  ) + theme_ArchR() + 
+  ylab("-log10(P-adj) Motif Enrichment") + 
+  xlab("Rank Sorted TFs Enriched") +
+  scale_color_gradientn(colors = paletteContinuous(set = "comet"))
+
+ggUp
+
+
+# Run chromVAR! 
+
+projNC <- addBgdPeaks(projNC, method = "ArchR")
+
+projNC <- addDeviationsMatrix(
+  ArchRProj = projNC, binarize = T,
+  peakAnnotation = "Motif",
+  force = TRUE)
+
+plotVarDev <- getVarDeviations(projNC, name = "MotifMatrix", plot = TRUE)
+
+```
+
+
+Let's set up a couple of pseudotime trajectory arms for the major clusters we find. We could define these as having an overrepresentation of HH18 cells, but it's easier to just look and go by the clusters. 
+
+```{r}
+# C11 is HH6/root
+
+trajectory1 <- c("C11", "C2", "C3") # C3END
+trajectory2 <- c("C11", "C12","C5","C4") # C4END
+trajectory3 <- c("C11", "C12", "C10") # C10END
+trajectory4 <- c("C11", "C1") # C1END
+trajectory5 <- c("C11", "C8", "C9") # C9END
+trajectory6 <- c("C11", "C6") # C6END
+trajectory7 <- c("C11", "C8","C7") # C7END
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C3END", 
+    groupBy = "Clusters",
+    trajectory = trajectory1, 
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C4END", 
+    groupBy = "Clusters",
+    trajectory = trajectory2, 
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C10END", 
+    groupBy = "Clusters",
+    trajectory = trajectory3, 
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C1END", 
+    groupBy = "Clusters",
+    trajectory = trajectory4,
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C9END", 
+    groupBy = "Clusters",
+    trajectory = trajectory5, 
+    embedding = "UMAP",
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1, 
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C6END", 
+    groupBy = "Clusters",
+    trajectory = trajectory6, 
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C7END", 
+    groupBy = "Clusters",
+    trajectory = trajectory7, 
+    embedding = "UMAP",
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1, 
+    force = TRUE)
+
+# Fix an issue with retrieving an embedding with >2 dimensions.
+# plotTrajectoryCustom <- edit(plotTrajectory)
+
+# C3END
+# C4END
+# C10END
+# C1END
+# C9END
+# C6END
+# C7END
+
+# It might be more accurate to 
+# Generate a score based on the 'average' age of the cells in these clusters.
+# What is the hours between each stage?
+# HH6, HH8, HH10, HH12, HH14, HH16, HH18
+# 24 28 36 46 52 54 60
+hh_to_hours <- data.frame(timepoint = c("HH6","HH8","HH10","HH12",
+                                        "HH14","HH16","HH18"),
+                          hours = c(24,28,36,46,52,54,60))
+
+# For every cell of that stage, multiply by the hours of the stage and then average them out for an average cluster TRUE age.
+C3_cells$Sample@lengths
+
+df <- data.frame(timepoint = C3_cells$Sample@values,
+           cells = C3_cells$Sample@lengths)
+df$hours <- lookup(df$timepoint, hh_to_hours)
+
+# Average cell age in hours in this cluster.
+sum(df[,2] * df[,3]) / sum(df[,2])
+
+avg_hours <- function(x){
+  df <- data.frame(timepoint = x$Sample@values,
+           cells = x$Sample@lengths)
+  df$hours <- lookup(df$timepoint, hh_to_hours)
+  return(sum(df[,2] * df[,3]) / sum(df[,2]))
+}
+
+C3_weighted_age <- avg_hours(C3_cells)
+C4_weighted_age <- avg_hours(C4_cells)
+C10_weighted_age <- avg_hours(C10_cells)
+C1_weighted_age <- avg_hours(C1_cells)
+C9_weighted_age <- avg_hours(C9_cells)
+C6_weighted_age <- avg_hours(C6_cells)
+C7_weighted_age <- avg_hours(C7_cells)
+
+# Currently all values are scaled from 1 to 100. What if we just multiply these?
+
+C3END_Weighted <- as.numeric(projNC@cellColData[,16] * C3_weighted_age)
+C4END_Weighted <- as.numeric(projNC@cellColData[,17] * C4_weighted_age)
+C10END_Weighted <- as.numeric(projNC@cellColData[,18] * C10_weighted_age)
+C1END_Weighted <- as.numeric(projNC@cellColData[,19] * C1_weighted_age)
+C9END_Weighted <- as.numeric(projNC@cellColData[,20] * C9_weighted_age)
+C6END_Weighted <- as.numeric(projNC@cellColData[,21] * C6_weighted_age)
+C7END_Weighted <- as.numeric(projNC@cellColData[,22] * C7_weighted_age)
+
+# Are there instances of NA despite including every cluster?
+test <- data.frame(
+  C3END_Weighted,
+  C4END_Weighted,
+  C10END_Weighted,
+  C1END_Weighted,
+  C9END_Weighted,
+  C6END_Weighted,
+  C7END_Weighted
+)
+
+test$avg <- Matrix::rowMeans(test, na.rm = T)
+
+test$rescaled <-  round(scales::rescale(test$avg, to = c(1, 100)))
+
+projNC$hour_adj_pseudotime <- test$rescaled
+
+p <- plotTrajectoryCustom(projNC, trajectory = "hour_adj_pseudotime",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP")
+
+p[[1]]
+
+# WOW! This is really nice.
+saveArchRProject(ArchRProj = projNC, outputDirectory = "/data/Austin/10XscATAC/ArchR_data_save", load = FALSE)
+```
+

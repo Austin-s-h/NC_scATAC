@@ -1,0 +1,358 @@
+---
+title: "Neural Crest single-cell ATAC-Seq Timecourse"
+output: html_notebook
+---
+
+## Part 3: Harmonized Seurat
+
+We next want to make an integrated Seurat object containing all of our datasets. To accomplish this, we need to create a master consensus peakset and re-quantify the data.
+
+Let's start by defining the directories that contain our 10X data.
+```{r Define directories}
+HH6_dir <- "/data/Austin/10XscATAC/HH6_10xscATAC_Lane1/outs/"
+HH8_dir <- "/data/Austin/10XscATAC/HH8_10xscATAC_Lane1_Lane2/outs/"
+HH10_dir <- "/data/Austin/10XscATAC/HH10_10xscATAC_Lane1_Lane2/outs/"
+HH12_dir <- "/data/Austin/10XscATAC/HH12_10xscATAC_Lane1_Lane2/outs/"
+HH14_dir <- "/data/Austin/10XscATAC/HH14_10xscATAC_Lane1_Lane2/outs/"
+HH16_dir <- "/data/Austin/10XscATAC/HH16_10xscATAC_Lane1/outs/"
+HH18_dir <- "/data/Austin/10XscATAC/HH18_10xscATAC_Lane1/outs/"
+libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
+```
+
+Next, let's load the required libraries and annotation.
+```{r message=FALSE, warning=TRUE}
+#Sys.setenv(LD_LIBRARY_PATH = "/opt/R/4.0.2/lib/R/lib::/lib:/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/jvm/java-11-openjdk-amd64/lib/server:/home/ash274/miniconda3/envs/py37/lib")
+
+library(harmony)
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(AnnotationHub)
+library(ggplot2)
+library(patchwork)
+library(Matrix)
+library(rtracklayer)
+library(readr)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(future)
+library(qdapTools)
+library(stringr)
+library(SeuratDisk)
+library(loomR)
+plan("multisession", workers = 62)
+options(future.globals.maxSize = 400 * 1024 ^ 3) # for 100 Gb RAM
+
+# Setup Annotation
+ah <- AnnotationHub()
+#qr <- query(ah, c("EnsDb", "gallus gallus", "101"))
+EnsDb_gg6 <- ah[["AH83209"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+```
+First, let's merge all of the peaksets from the datasets.
+
+```{r}
+HH6_peaks <- readRDS(file = paste0(HH6_dir, "macs3/HH6_combined_peaks.RDS"))
+HH8_peaks <- readRDS(file = paste0(HH8_dir, "macs3/HH8_combined_peaks.RDS"))
+HH10_peaks <- readRDS(file = paste0(HH10_dir, "macs3/HH10_combined_peaks.RDS"))
+HH12_peaks <- readRDS(file = paste0(HH12_dir, "macs3/HH12_combined_peaks.RDS"))
+HH14_peaks <- readRDS(file = paste0(HH14_dir, "macs3/HH14_combined_peaks.RDS"))
+HH16_peaks <- readRDS(file = paste0(HH16_dir, "macs3/HH16_combined_peaks.RDS"))
+HH18_peaks <- readRDS(file = paste0(HH18_dir, "macs3/HH18_combined_peaks.RDS"))
+
+combined.peaks <- reduce(c(HH6_peaks, HH8_peaks, HH10_peaks,HH12_peaks, HH14_peaks, HH16_peaks, HH18_peaks), drop.empty.ranges = T)
+
+summary(width(combined.peaks))
+```
+
+We then create fragment objects for each of our libraries.
+
+```{r}
+count <- 0
+for (dir in c(HH6_dir, HH8_dir, HH10_dir, HH12_dir,
+              HH14_dir, HH16_dir, HH18_dir)){
+count <- count + 1
+# Load metadata
+lib.meta <- read.table(
+  file = paste0(dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ] # remove the first row
+
+lib.meta <- lib.meta[lib.meta$is__cell_barcode == 1,]
+
+# Create fragment Object
+lib.fragments <- CreateFragmentObject(
+  path = paste0(dir, "fragments.tsv.gz"), 
+  cells = rownames(lib.meta), validate.fragments = F)
+
+# Quantify on merged peakset
+lib.counts <- FeatureMatrix(
+  fragments = lib.fragments,
+  features = combined.peaks)
+
+lib_assay <- CreateChromatinAssay(lib.counts, fragments = lib.fragments)
+lib <- CreateSeuratObject(lib_assay, assay = "ATAC")
+lib$timepoint <- libraries[count]
+
+assign(libraries[count], lib, envir=.GlobalEnv)
+}
+```
+
+Now, let's merge all datasets together.
+
+```{r}
+# The merge function seems to be broken for Seurat objects.
+# So we will have to do this manually.
+HH6.meta <- read.table(
+  file = paste0(HH6_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH6.meta <- HH6.meta[HH6.meta$is__cell_barcode == 1,]
+
+HH6 <- HH6[,rownames(HH6.meta)]
+
+dimnames(HH6@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH6@assays$ATAC@data)[[2]]))),"-","HH6")
+
+HH8.meta <- read.table(
+  file = paste0(HH8_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH8.meta <- HH8.meta[HH8.meta$is__cell_barcode == 1,]
+
+HH8 <- HH8[,rownames(HH8.meta)]
+
+dimnames(HH8@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH8@assays$ATAC@data)[[2]]))),"-","HH8")
+
+HH10.meta <- read.table(
+  file = paste0(HH10_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH10.meta <- HH10.meta[HH10.meta$is__cell_barcode == 1,]
+
+HH10 <- HH10[,rownames(HH10.meta)]
+
+dimnames(HH10@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH10@assays$ATAC@data)[[2]]))),"-","HH10")
+HH12.meta <- read.table(
+  file = paste0(HH12_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH12.meta <- HH12.meta[HH12.meta$is__cell_barcode == 1,]
+
+HH12 <- HH12[,rownames(HH12.meta)]
+
+dimnames(HH12@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH12@assays$ATAC@data)[[2]]))),"-","HH12")
+
+HH14.meta <- read.table(
+  file = paste0(HH14_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH14.meta <- HH14.meta[HH14.meta$is__cell_barcode == 1,]
+
+HH14 <- HH14[,rownames(HH14.meta)]
+
+dimnames(HH14@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH14@assays$ATAC@data)[[2]]))),"-","HH14")
+
+HH16.meta <- read.table(
+  file = paste0(HH16_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH16.meta <- HH16.meta[HH16.meta$is__cell_barcode == 1,]
+
+HH16 <- HH16[,rownames(HH16.meta)]
+
+dimnames(HH16@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH16@assays$ATAC@data)[[2]]))),"-","HH16")
+
+HH18.meta <- read.table(
+  file = paste0(HH18_dir, "singlecell.csv"),
+  stringsAsFactors = FALSE,
+  sep = ",",
+  header = TRUE,
+  row.names = 1)[-1, ]
+
+HH18.meta <- HH18.meta[HH18.meta$is__cell_barcode == 1,]
+
+HH18 <- HH18[,rownames(HH18.meta)]
+
+dimnames(HH18@assays$ATAC@data)[[2]] <- paste0(as.character(as.character(unlist(dimnames(HH18@assays$ATAC@data)[[2]]))),"-","HH18")
+
+merged.counts <- Matrix::cBind(HH6@assays$ATAC@data,HH8@assays$ATAC@data,
+                      HH10@assays$ATAC@data,HH12@assays$ATAC@data,
+                      HH14@assays$ATAC@data,HH16@assays$ATAC@data,
+                      HH18@assays$ATAC@data)
+
+combined_seurat <- CreateChromatinAssay(
+  counts = merged.counts,
+  ranges = combined.peaks,
+  annotation = annotations,
+  genome = seqinfo(EnsDb_gg6)
+)
+
+combined_seurat <- CreateSeuratObject(
+  counts = combined_seurat,
+  assay = 'peaks',
+  project = 'ATAC')
+
+combined_seurat$timepoint <- str_split(rownames(combined_seurat@meta.data), "-", simplify = T)[,3]
+
+
+combined_seurat
+bc_to_batch <- data.frame(barcode = c("HH6","HH8","HH10","HH12","HH14","HH16","HH18"),
+           timepoint =c ("batch3","batch2","batch2","batch1","batch2","batch2","batch3"))
+
+combined_seurat@meta.data$batch <- lookup(combined_seurat$timepoint, key.match = bc_to_batch)
+
+saveRDS(combined_seurat, file = "temp_combined_seurat.RDS", compress = F)
+```
+
+Great, now that we have a final combined Seurat object, we can proceed with dimensionality reduction.
+
+```{r}
+combined_seurat <- readRDS("temp_combined_seurat.RDS")
+combined_seurat <- BinarizeCounts(combined_seurat)
+
+combined_seurat <- RunTFIDF(object = combined_seurat, assay = "peaks")
+combined_seurat <- FindTopFeatures(combined_seurat, min.cutoff = 'q25')
+combined_seurat <- RunSVD(combined_seurat)
+DepthCor(combined_seurat)
+
+combined_seurat <- RunUMAP(
+  object = combined_seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+combined_seurat <- FindNeighbors(
+  object = combined_seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+combined_seurat <- FindClusters(
+  object = combined_seurat,
+  algorithm = 2,
+  resolution = 1.1,
+  verbose = FALSE
+)
+
+
+DimPlot(object = combined_seurat, label = TRUE, reduction = "umap", group.by = "batch") + NoLegend()
+
+```
+As you can see, without integration there are clear batch effects in our data. Let's run harmony to reduce these.
+
+```{r}
+combined_seurat <- FindVariableFeatures(combined_seurat, selection.method = "vst", nfeatures = 30000)
+combined_seurat <- ScaleData(combined_seurat, vars.to.regress = c("nCount_peaks"))
+combined_seurat <- RunPCA(combined_seurat, assay = "peaks", approx = T)
+combined_seurat <- RunHarmony(combined_seurat, group.by.vars = c("batch"), assay.use = "peaks")
+
+DepthCor(combined_seurat, reduction = "harmony")
+
+combined_seurat <- RunUMAP(
+  object = combined_seurat,
+  reduction = 'harmony',
+  dims = 1:30, 
+)
+combined_seurat <- FindNeighbors(
+  object = combined_seurat,
+  reduction = 'harmony',
+  dims = 1:30
+)
+combined_seurat <- FindClusters(
+  object = combined_seurat,
+  algorithm = 2,
+  resolution = 1.1,
+  verbose = FALSE)
+
+DimPlot(object = combined_seurat, label = TRUE, reduction = "umap", group.by = "batch") + NoLegend()
+```
+
+```{r}
+combined_seurat <- readRDS("tmp_combined_seurat.RDS")
+
+# Normalization and Clustering
+combined_seurat <- BinarizeCounts(combined_seurat)
+
+# I'm going to split the data randomly, run SCTransform and then recombine it.
+# Otherwise stupid memory overflow.
+
+rand_cells <- split(sample(combined_seurat@meta.data$barcode),rep(1:7,2267))
+
+
+for (sr in c(split_1, split_2,split_3,split_4,split_5,split_6,split_7)){
+  sr <- SCTransform(sr,
+                      verbose = T,
+                      do.correct.umi = T,
+                      assay = "peaks",
+                      variable.features.n = NULL,
+                      return.only.var.genes = F,
+                      do.scale = T,
+                      do.center = T)
+}
+
+
+combined_seurat <- SCTransform(combined_seurat,
+                      verbose = T,
+                      #vars.to.regress = "peak_region_fragments",
+                      do.correct.umi = F,
+                      assay = "peaks",
+                      variable.features.n = NULL,
+                      return.only.var.genes = T,
+                      do.scale = T,
+                      do.center = T,
+                      conserve.memory = T)
+
+combined_seurat <- RunPCA(combined_seurat, assay = "SCT", approx = T)
+combined_seurat <- RunHarmony(combined_seurat, c("batch"))
+combined_seurat <- RunSVD(object = combined_seurat)
+DepthCor(combined_seurat)
+
+combined_seurat <- RunUMAP(
+  object = combined_seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+combined_seurat <- FindNeighbors(
+  object = combined_seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+combined_seurat <- FindClusters(
+  object = combined_seurat,
+  algorithm = 2,
+  resolution = 1.1,
+  verbose = FALSE
+)
+
+
+DimPlot(object = combined_seurat, label = TRUE, reduction = "umap", group.by = "timepoint") + NoLegend()
+
+# Hold off on subset of depth until after first UMAP.
+#combined_seurat <- subset(
+#  x = combined_seurat,
+#  subset = peak_region_fragments > 1250 &
+#    peak_region_fragments < 100000 &
+#    pct_reads_in_peaks > 40 &
+#    nucleosome_signal < 4 &
+#    TSS.enrichment > 2
+#)
+```
+
