@@ -1,0 +1,279 @@
+---
+title: "R Notebook"
+output:
+  html_notebook:
+    toc: yes
+    code_folding: hide
+editor_options:
+  chunk_output_type: inline
+---
+
+
+```{r Loading libraries and data, message=FALSE, warning=FALSE}
+library(ArchR)
+library(knitr)
+library(TFBSTools)
+library(ComplexHeatmap)
+library(ggplot2)
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_save/")
+projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
+```
+
+# Figure 1 - Dimensionality Reduction & Clustering
+
+## A
+A picture of a HH16/18 chicken embryo electroporated with the TFAP2aE1 enhancer alongside a schematic of single-cell ATAC-Seq.
+
+## B
+A two-dimensional UMAP projection colored by original sample identity (timepoint).
+```{r}
+p1 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                    name = "Sample", plotAs = "points",
+                    pal = ArchRPalettes$bear, size = 0.2, rastr = F)
+plotPDF(p1, name = "Plot-UMAP-Sample.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p1
+```
+
+## C
+A two-dimensional UMAP projection followed by clustering in ArchR.
+```{r}
+p2 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData", 
+                    name = "Clusters", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(p2, name = "Plot-UMAP-Clusters.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p2
+```
+
+
+## E
+A customized plot of enriched chromVAR motifs in the UMAP projection.
+```{r}
+motifs <- c("NKX6.3","NR2F2", "TEAD1",
+            "TFAP2A","GBX2","Six3","Pou5f1..Sox2",
+            "Foxd3","HMRA1","MITF","NEUROG2","NEUROD1","ASCL1",
+            "TWIST1", "OTX2","YY2","MEIS1","MEIS2","POU1F1",
+            "RFX3","RFX2","PAX6","SNAI2","GRHL2","EBF3","SP5",
+            "SHOX","MSX1","GATA2","HOXA1","TCF7L2","RAP2.3","RUNX1")
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+# GBX2 (C8,C6)
+# TFAP2A (C6, C4, C3)
+# TEAD1 (C4,C10,C2,C3)
+# NKX6.3 (C1, C9, C7, C8)
+# SIX3 (C11, C6, C2, C3)
+# POU5F1..SOX2 (C11, C10, C8)
+plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
+plotting_motifs_z <- plotting_motifs[1:(length(plotting_motifs)/2)]
+
+motif_plot_nocutoff <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
+              name = plotting_motifs_z, plotAs = "points", sampleCells = NULL,
+              rastr = F, keepAxis = F)
+plotPDF(motif_plot_nocutoff, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+```
+## F
+A heatmap of the top changing motifs
+```{r eval=FALSE, include=FALSE}
+Cluster_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    bias = c("log10(nFrags)"),
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+Motif_list <- getMarkers(Cluster_Motifs, cutOff = "FDR <= 1e-10 & Log2FC >= 1")
+Motif_df <- as.data.frame(Motif_list)
+top_Motifs <- Motif_df %>% dplyr::group_by(group_name) %>% dplyr::top_n(5, wt = -log10(FDR))
+
+toplotMotifs <- getFeatures(projNC, select = paste(top_Motifs$name, collapse="|"), useMatrix = "MotifMatrix")
+
+
+# What about for some harder comparisons?
+Cluster7 <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = "C7",
+    #bgdGroups = c("C9"),
+    bias = c("log10(nFrags)"),
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+Cluster7_list <- as.data.frame(getMarkers(Cluster7, cutOff = "FDR <= 1e-3 & Log2FC >= 1"))
+
+
+
+assayNames <- names(SummarizedExperiment::assays(Cluster_Motifs))
+    for (an in assayNames) {
+        eval(parse(text = paste0(an, " <- ", "SummarizedExperiment::assays(Cluster_Motifs)[['", 
+            an, "']]")))
+    }
+as.matrix(SummarizedExperiment::assays(Cluster_Motifs)[["Log2FC"]])
+passMat <- eval(parse(text = "FDR <= 0.001"))
+idx <- which(rowSums(passMat, na.rm = TRUE) > 0 & matrixStats::rowVars(mat) != 
+            0 & !is.na(matrixStats::rowVars(mat)))
+
+    mat <- mat[idx, , drop = FALSE]
+    
+# Remove PassMat functionality.
+custom_plotMarkerHeatmap <- edit(custom_plotMarkerHeatmap)
+
+tf_heatmap_mat <- custom_plotMarkerHeatmap(seMarker = Cluster_Motifs,
+                                    plotLog2FC = T,
+                                    cutOff = "FDR <= 0.001", limits = c(-10,10),
+                                    labelMarkers = toplotMotifs[1:length(toplotMotifs)/2],
+                                    transpose = T, returnMatrix = T, binaryClusterRows = F)
+
+# Set colnames
+colnames(tf_heatmap_mat) <- Cluster_Motifs@elementMetadata$name
+
+# To find labels
+labels <- gsub(pattern = "z.", x = toplotMotifs[1:length(toplotMotifs)/2], replacement = "") 
+
+
+tf_heatmap_mat[is.nan(tf_heatmap_mat)] <- NA
+tf_heatmap_mat_0 <- tf_heatmap_mat
+filter <- seq(1 ,ncol(tf_heatmap_mat_0), 2)
+tf_heatmap_mat_0 <- tf_heatmap_mat_0[,filter]
+tf_heatmap_mat_0[is.na(tf_heatmap_mat_0)] <- 0
+
+
+ComplexHeatmap::Heatmap(matrix = tf_heatmap_mat[,labels], cluster_rows = F, cluster_columns = F)
+
+
+ComplexHeatmap::Heatmap(matrix = tf_heatmap_mat_0, row_names_gp = gpar(fontsize = 8))
+```
+
+```{r}
+
+```
+
+# Figure S1 - QC Metrics
+We saved a pre-filtering version of our object, and use it here to show pre-filtering QC.
+
+## Prep
+
+```{r}
+library(ArchR)
+library(knitr)
+library(TFBSTools)
+library(ComplexHeatmap)
+library(ggplot2)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(org.Gg.eg.db)
+library(GenomicFeatures)
+library(dplyr)
+library(qdapTools)
+
+addArchRThreads(threads = 32) 
+set.seed(1)
+
+HH6_dir <- "/data/Austin/10XscATAC/HH6_10xscATAC_Lane1/outs/"
+HH8_dir <- "/data/Austin/10XscATAC/HH8_10xscATAC_Lane1_Lane2/outs/"
+HH10_dir <- "/data/Austin/10XscATAC/HH10_10xscATAC_Lane1_Lane2/outs/"
+HH12_dir <- "/data/Austin/10XscATAC/HH12_10xscATAC_Lane1_Lane2/outs/"
+HH14_dir <- "/data/Austin/10XscATAC/HH14_10xscATAC_Lane1_Lane2/outs/"
+HH16_dir <- "/data/Austin/10XscATAC/HH16_10xscATAC_Lane1/outs/"
+HH18_dir <- "/data/Austin/10XscATAC/HH18_10xscATAC_Lane1/outs/"
+libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
+
+# Genome annotation
+arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
+# Manually remove noncontigous chromosomes.
+arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
+TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
+
+doublet_cells <- as.character(read.csv(file = "doublet_cells.csv", row.names = 1)[,1])
+
+projNC_pre <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_Prefiltered/")
+
+projNC_pre@projectMetadata$outputDirectory <- "./Figure_Exports"
+projNC_pre$DoubletCall <- ifelse(projNC_pre$cellNames %in% doublet_cells,
+                                 "Doublet","Singlet")
+```
+
+## A
+A Fragment-size distribution plot 
+```{r}
+p4 <- plotFragmentSizes(ArchRProj = projNC_pre)
+plotPDF(p4, name = "Prefiltered-Plot-Sample-Fragment-Dist.pdf", ArchRProj = projNC_pre,
+        addDOC = FALSE, width = 8, height = 8)
+p4
+```
+
+## B
+A TSS enrichment plot and FRiP score plot
+```{r}
+p5 <- plotGroups(
+    ArchRProj = projNC_pre, 
+    groupBy = "Sample", 
+    colorBy = "cellColData", 
+    name = "TSSEnrichment",
+    plotAs = "violin",
+    alpha = 0.4,
+    addBoxPlot = TRUE,
+    discreteSet = "bear"
+   ) + geom_hline(linetype = 5, size = 1,show.legend = F, yintercept = 3.5)
+
+plotPDF(p5, name = "Prefiltered-Plot-Sample-TSS.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
+p5
+
+p6 <- plotGroups(
+    ArchRProj = projNC_pre, 
+    groupBy = "Sample", 
+    colorBy = "cellColData", 
+    name = "FRIP",
+    plotAs = "violin",
+    alpha = 0.4,
+    addBoxPlot = TRUE,
+    discreteSet = "bear"
+   ) + geom_hline(linetype = 5, size = 1,show.legend = F, yintercept = 0.4)
+
+plotPDF(p6, name = "Prefiltered-Plot-Sample-FRiP.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
+p6
+```
+## C 
+Doublet Detection Plot
+
+```{r}
+p7 <- plotEmbedding(ArchRProj = projNC_pre, colorBy = "cellColData", name = "DoubletCall", embedding = "UMAP", size = 1, baseSize = 14, plotAs = "points")
+
+plotPDF(p7, name = "Prefiltered-Plot-UMAP-Doublet.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
+
+p7
+```
+
+## D
+Depth Plot
+
+```{r}
+p8 <- plotGroups(
+    ArchRProj = projNC_pre, 
+    groupBy = "Sample", 
+    colorBy = "cellColData", 
+    name = "log10(nFrags)",
+    plotAs = "violin",
+    alpha = 0.4,
+    addBoxPlot = TRUE,
+    discreteSet = "bear"
+   ) + geom_hline(linetype = 5, size = 1,show.legend = F, yintercept = 3.3)
+plotPDF(p8, name = "Prefiltered-Plot-Sample-Depth.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
+p8
+```
+
+# Figure 2 - Pseudotime
+## D
+A two-dimensional UMAP projection colored by real timepoint-normalized pseudotime projections
+```{r}
+p3 <- plotTrajectory(projNC, trajectory = "hour_adj_pseudotime",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p3[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p3[[1]]
+```

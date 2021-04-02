@@ -51,3 +51,6 @@ vignettes/*.pdf
 
 # ArchR logs
 /ArchRLogs/
+
+# Exported Images
+/Figure_Exports/

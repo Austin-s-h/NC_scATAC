@@ -12,8 +12,14 @@ Each of them have been summarized using the cellranger-atac pipeline into their 
 
 ## Part 1: Recalling peaks with MACS3
 
-Because 10X called peaks are sometimes very large and in order to increase sensitivity to rare peaks, we call peaks using MACS3 for every cluster within every timepoint.
+Because 10X called peaks are sometimes very large and in order to increase sensitivity to rare peaks, we call peaks using MACS3 for every cluster within every timepoint. We accomplish this through the CallPeaks function in Signac.
 
-## Part 2: Harmonized Seurat, Dimensionality reduction.
+## Part 2: ArchR Analysis
 
-We define a master consensus of peaks by combining the peak sets per timepoint. Next, we re-quantify libraries at these locations using fragment files, and create a harmonized 
+[ArchR](https://www.archrproject.com/bookdown/getting-started-with-archr.html) is a new project from the Greenleaf lab that is a new analysis package optimized for parallel computing and massive datasets. It uses space-efficient hd5 files in a single-cell format (.arrow) to store metadata and sparce matricies on disk, load them into RAM and process in chunks. We will use ArchR for dimensionality reduction, clustering, feature extraction (Differential Peaks, Motifs, and Genescores), Pseudotime, and some visualizations. Figure-level exports are kept in a separate .Rmd file.
+
+As this is a new package there have been some issues running some functions. In particular, making .arrow files is broken in the development 1.0.2 package. However, calling doublets in 1.0.1 is broken. There are also issues with plotting Heatmaps.
+
+## Part X: Visualizations
+
+It can be really hard to keep track of what code was used to generate figures, especially with unique analysis. To this end, this will be strictly kept to reading data from the disk and visualizing it without further processing. Each figure will have a section.
