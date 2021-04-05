@@ -22,6 +22,9 @@
 # Packrat libraries
 packrat/lib*/
 
+# Packrat custom libraries
+packrat/src/
+
 # RStudio files
 .Rproj.user/
 
@@ -39,6 +42,9 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+
+# Temporary files 
+tmp/
 
 # R Environment Variables
 .Renviron

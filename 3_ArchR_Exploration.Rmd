@@ -1,0 +1,110 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+
+# markersPeaks <- getMarkerFeatures(
+#     ArchRProj = projNC, 
+#     useMatrix = "PeakMatrix", 
+#     groupBy = "Clusters",
+#   bias = c("TSSEnrichment", "log10(nFrags)"),
+#   testMethod = "wilcoxon")
+# 
+# # This checks binary presence of a TF in a given peakset, but isn't chromvAR
+# motifsUp <- peakAnnoEnrichment(
+#     seMarker = markersPeaks,
+#     ArchRProj = projNC,
+#     peakAnnotation = "Motif",
+#     cutOff = "FDR <= 0.1 & Log2FC >= 0.5"
+#   )
+# 
+# df <- data.frame(TF = rownames(motifsUp), mlog10Padj = assay(motifsUp)[,1])
+# df <- df[order(df$mlog10Padj, decreasing = TRUE),]
+# df$rank <- seq_len(nrow(df))
+# 
+# ggUp <- ggplot(df, aes(rank, mlog10Padj, color = mlog10Padj)) + 
+#   geom_point(size = 1) +
+#   ggrepel::geom_label_repel(
+#         data = df[rev(seq_len(30)), ], aes(x = rank, y = mlog10Padj, label = TF), 
+#         size = 1.5,
+#         nudge_x = 2,
+#         color = "black"
+#   ) + theme_ArchR() + 
+#   ylab("-log10(P-adj) Motif Enrichment") + 
+#   xlab("Rank Sorted TFs Enriched") +
+#   scale_color_gradientn(colors = paletteContinuous(set = "comet"))
+# 
+# ggUp
+# 
+
+
+# toplotMotifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
+# 
+# toplotMotifs_z <- toplotMotifs[1:23]
+# 
+# assayNames <- names(SummarizedExperiment::assays(Cluster_Motifs))
+# mat <- as.matrix(SummarizedExperiment::assays(Cluster_Motifs)[["Mean"]])
+# 
+# heatmapMotifs <- plotMarkerHeatmap(
+#   seMarker = Cluster_Motifs, 
+#   labelMarkers = toplotMotifs_z,
+#   transpose = TRUE
+# )
+# 
+# ComplexHeatmap::draw(heatmapMotifs, heatmap_legend_side = "bot", annotation_legend_side = "bot")
+# 
+# plotVarDev <- getVarDeviations(projNC, name = "MotifMatrix", plot = TRUE)
+# var_tfs <- plotVarDev$data
+# 
+# grey_red <- ArchRPalettes$whiteRed
+# grey_red[1] <- "grey"
+# 
+# motif_cutofss <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
+#               name = toplotMotifs_z, pal = grey_red, plotAs = "points", sampleCells = NULL,
+#               rastr = F,  quantCut = c(0.64999999, 0.65))
+# 
+# plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
+#               name = "z:Pou5f1..Sox2_68", pal = ArchRPalettes$greenBlue,
+#               rastr = F)
+```
+
+
+Correlation of Motifs to GeneMatrix
+```{r}
+seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
+rowData(seZ)$maxDelta <- lapply(seq_len(ncol(seZ)), function(x){
+  rowMaxs(assay(seZ) - assay(seZ)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM <- correlateMatrices(
+    ArchRProj = projNC,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM$maxDelta <- rowData(seZ)[match(corGSM_MM$MotifMatrix_name, rowData(seZ)$name), "maxDelta"]
+
+corGSM_MM <- corGSM_MM[order(abs(corGSM_MM$cor), decreasing = TRUE), ]
+corGSM_MM <- corGSM_MM[which(!duplicated(gsub("\\-.*","",corGSM_MM[,"MotifMatrix_name"]))), ]
+corGSM_MM$TFRegulator <- "NO"
+corGSM_MM$TFRegulator[which(corGSM_MM$cor > 0.4 & corGSM_MM$padj < 0.05 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "YES"
+sort(corGSM_MM[corGSM_MM$TFRegulator=="YES",1])
+
+p5 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "YES"="firebrick3")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM$maxDelta)*1.05)
+  )
+
+p5
+```

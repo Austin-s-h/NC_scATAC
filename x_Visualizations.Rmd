@@ -49,29 +49,27 @@ p2
 ```
 
 
-## E
+## D
 A customized plot of enriched chromVAR motifs in the UMAP projection.
 ```{r}
-motifs <- c("NKX6.3","NR2F2", "TEAD1",
-            "TFAP2A","GBX2","Six3","Pou5f1..Sox2",
-            "Foxd3","HMRA1","MITF","NEUROG2","NEUROD1","ASCL1",
-            "TWIST1", "OTX2","YY2","MEIS1","MEIS2","POU1F1",
-            "RFX3","RFX2","PAX6","SNAI2","GRHL2","EBF3","SP5",
-            "SHOX","MSX1","GATA2","HOXA1","TCF7L2","RAP2.3","RUNX1")
+motifs <- c("Pou5f1..Sox2","RUNX1","ASCL1","MEIS2","MITF","TWIST1","GRHL2","OTX2")
+
 grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"
-# GBX2 (C8,C6)
-# TFAP2A (C6, C4, C3)
-# TEAD1 (C4,C10,C2,C3)
-# NKX6.3 (C1, C9, C7, C8)
-# SIX3 (C11, C6, C2, C3)
-# POU5F1..SOX2 (C11, C10, C8)
+
 plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
 plotting_motifs_z <- plotting_motifs[1:(length(plotting_motifs)/2)]
+
+# Figure S1
+# YY2, SIX3, TFAP2A, PAX6, FOXD3, NR2F2, RFX3
 
 motif_plot_nocutoff <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
               name = plotting_motifs_z, plotAs = "points", sampleCells = NULL,
               rastr = F, keepAxis = F)
+
+
+ggAlignPlots(p3, p4, type = "h")
+
 plotPDF(motif_plot_nocutoff, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 ```
@@ -265,6 +263,29 @@ p8 <- plotGroups(
 plotPDF(p8, name = "Prefiltered-Plot-Sample-Depth.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
 p8
 ```
+## E
+Extra motif plots of markers
+```{r}
+motifs <- c("YY2","SIX3","TFAP2A","PAX6","FOXD3","NR2F2","RFX3")
+
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+
+plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
+plotting_motifs_z <- plotting_motifs[1:(length(plotting_motifs)/2)]
+
+
+motif_plot_nocutoff <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
+              name = plotting_motifs_z, plotAs = "points", sampleCells = NULL,
+              rastr = F, keepAxis = F)
+
+
+ggAlignPlots(p3, p4, type = "h")
+
+plotPDF(motif_plot_nocutoff, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+```
+
 
 # Figure 2 - Pseudotime
 ## D

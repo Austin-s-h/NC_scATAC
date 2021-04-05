@@ -18,7 +18,9 @@ Because 10X called peaks are sometimes very large and in order to increase sensi
 
 [ArchR](https://www.archrproject.com/bookdown/getting-started-with-archr.html) is a new project from the Greenleaf lab that is a new analysis package optimized for parallel computing and massive datasets. It uses space-efficient hd5 files in a single-cell format (.arrow) to store metadata and sparce matricies on disk, load them into RAM and process in chunks. We will use ArchR for dimensionality reduction, clustering, feature extraction (Differential Peaks, Motifs, and Genescores), Pseudotime, and some visualizations. Figure-level exports are kept in a separate .Rmd file.
 
-As this is a new package there have been some issues running some functions. In particular, making .arrow files is broken in the development 1.0.2 package. However, calling doublets in 1.0.1 is broken. There are also issues with plotting Heatmaps.
+As this is a new package there have been some issues running some functions. In particular, making .arrow files is broken in the development 1.0.2 package. However, calling doublets in 1.0.1 is broken. There are also issues with plotting Heatmaps. So, I loaded doublets using the 1.0.2 function, but used 1.0.1 for the remaining analysis.
+
+
 
 ## Part X: Visualizations
 
