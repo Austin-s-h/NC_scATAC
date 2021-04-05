@@ -1,9 +1,11 @@
 ---
 title: "R Notebook"
 output:
-  html_notebook:
+  html_notebook: 
     toc: yes
     code_folding: hide
+    fig_width: 8
+    fig_height: 6
 editor_options:
   chunk_output_type: inline
 ---
@@ -18,7 +20,7 @@ library(ggplot2)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
-projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_save/")
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
 projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
 ```
 
@@ -58,98 +60,30 @@ grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"
 
 plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
-plotting_motifs_z <- plotting_motifs[1:(length(plotting_motifs)/2)]
 
-# Figure S1
-# YY2, SIX3, TFAP2A, PAX6, FOXD3, NR2F2, RFX3
+plotting_motifs_z <- paste0("z:",plotting_motifs)
 
-motif_plot_nocutoff <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
-              name = plotting_motifs_z, plotAs = "points", sampleCells = NULL,
-              rastr = F, keepAxis = F)
+# Problem with threads > 1...
+motif_plot_nocutoff <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_motifs_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1)
 
 
-ggAlignPlots(p3, p4, type = "h")
+combined <- cowplot::plot_grid(motif_plot_nocutoff[[1]],motif_plot_nocutoff[[2]],
+             motif_plot_nocutoff[[4]],motif_plot_nocutoff[[3]],
+             motif_plot_nocutoff[[8]],motif_plot_nocutoff[[7]],
+             motif_plot_nocutoff[[10]],motif_plot_nocutoff[[9]], nrow = 2)
 
-plotPDF(motif_plot_nocutoff, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(combined, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 16, height = 16)
 
+combined
 ```
-## F
-A heatmap of the top changing motifs
-```{r eval=FALSE, include=FALSE}
-Cluster_Motifs <- getMarkerFeatures(
-    ArchRProj = projNC, 
-    useMatrix = "MotifMatrix", 
-    groupBy = "Clusters",
-    bias = c("log10(nFrags)"),
-    testMethod = "wilcoxon",
-    useSeqnames = "z", threads = 1)
-
-Motif_list <- getMarkers(Cluster_Motifs, cutOff = "FDR <= 1e-10 & Log2FC >= 1")
-Motif_df <- as.data.frame(Motif_list)
-top_Motifs <- Motif_df %>% dplyr::group_by(group_name) %>% dplyr::top_n(5, wt = -log10(FDR))
-
-toplotMotifs <- getFeatures(projNC, select = paste(top_Motifs$name, collapse="|"), useMatrix = "MotifMatrix")
-
-
-# What about for some harder comparisons?
-Cluster7 <- getMarkerFeatures(
-    ArchRProj = projNC, 
-    useMatrix = "MotifMatrix", 
-    groupBy = "Clusters",
-    useGroups = "C7",
-    #bgdGroups = c("C9"),
-    bias = c("log10(nFrags)"),
-    testMethod = "wilcoxon",
-    useSeqnames = "z", threads = 1)
-Cluster7_list <- as.data.frame(getMarkers(Cluster7, cutOff = "FDR <= 1e-3 & Log2FC >= 1"))
-
-
-
-assayNames <- names(SummarizedExperiment::assays(Cluster_Motifs))
-    for (an in assayNames) {
-        eval(parse(text = paste0(an, " <- ", "SummarizedExperiment::assays(Cluster_Motifs)[['", 
-            an, "']]")))
-    }
-as.matrix(SummarizedExperiment::assays(Cluster_Motifs)[["Log2FC"]])
-passMat <- eval(parse(text = "FDR <= 0.001"))
-idx <- which(rowSums(passMat, na.rm = TRUE) > 0 & matrixStats::rowVars(mat) != 
-            0 & !is.na(matrixStats::rowVars(mat)))
-
-    mat <- mat[idx, , drop = FALSE]
-    
-# Remove PassMat functionality.
-custom_plotMarkerHeatmap <- edit(custom_plotMarkerHeatmap)
-
-tf_heatmap_mat <- custom_plotMarkerHeatmap(seMarker = Cluster_Motifs,
-                                    plotLog2FC = T,
-                                    cutOff = "FDR <= 0.001", limits = c(-10,10),
-                                    labelMarkers = toplotMotifs[1:length(toplotMotifs)/2],
-                                    transpose = T, returnMatrix = T, binaryClusterRows = F)
-
-# Set colnames
-colnames(tf_heatmap_mat) <- Cluster_Motifs@elementMetadata$name
-
-# To find labels
-labels <- gsub(pattern = "z.", x = toplotMotifs[1:length(toplotMotifs)/2], replacement = "") 
-
-
-tf_heatmap_mat[is.nan(tf_heatmap_mat)] <- NA
-tf_heatmap_mat_0 <- tf_heatmap_mat
-filter <- seq(1 ,ncol(tf_heatmap_mat_0), 2)
-tf_heatmap_mat_0 <- tf_heatmap_mat_0[,filter]
-tf_heatmap_mat_0[is.na(tf_heatmap_mat_0)] <- 0
-
-
-ComplexHeatmap::Heatmap(matrix = tf_heatmap_mat[,labels], cluster_rows = F, cluster_columns = F)
-
-
-ComplexHeatmap::Heatmap(matrix = tf_heatmap_mat_0, row_names_gp = gpar(fontsize = 8))
-```
-
-```{r}
-
-```
-
 # Figure S1 - QC Metrics
 We saved a pre-filtering version of our object, and use it here to show pre-filtering QC.
 
@@ -272,20 +206,76 @@ grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"
 
 plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
-plotting_motifs_z <- plotting_motifs[1:(length(plotting_motifs)/2)]
 
+plotting_motifs_z <- paste0("z:",plotting_motifs)
 
-motif_plot_nocutoff <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "MotifMatrix",
-              name = plotting_motifs_z, plotAs = "points", sampleCells = NULL,
-              rastr = F, keepAxis = F)
+# Problem with threads > 1...
+motif_plot_supp <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_motifs_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1)
 
+combined2 <- cowplot::plot_grid(motif_plot_supp[[9]],motif_plot_supp[[3]],
+             motif_plot_supp[[8]],motif_plot_supp[[2]],
+             motif_plot_supp[[1]],motif_plot_supp[[6]],
+             motif_plot_supp[[7]], nrow = 2)
 
-ggAlignPlots(p3, p4, type = "h")
+plotPDF(combined2, name = "Plot-Motif-Zscores-supp.pdf", ArchRProj = projNC, addDOC = FALSE, width = 16, height = 16)
 
-plotPDF(motif_plot_nocutoff, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
-
+combined2
 ```
+## F
+A heatmap of the top changing motifs
+```{r}
+#scales::show_col(unlist(ArchRPalettes))
+Cluster_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
 
+Motif_list <- getMarkers(Cluster_Motifs, cutOff = "FDR <= 1e-50")
+Motif_df <- as.data.frame(Motif_list)
+top_Motifs <- Motif_df %>% dplyr::group_by(group_name) %>% dplyr::top_n(30, wt = -log10(FDR))
+
+# Motifs by cluster mean Z-Score?
+temp <- Cluster_Motifs@assays@data$Mean
+# Add rownames
+rownames(temp) <- Cluster_Motifs@elementMetadata$name
+
+temp_f <- temp[unique(top_Motifs$name),]
+
+# Who do we want to label?
+
+label_motifs <- c("TWIST1_741", "OTX2_718","SNAI2_729",
+                  "Dmbx1_366","ZEB1_412","ZBTB18_192","Pou5f1..Sox2_38",
+                  "RUNX1_41","ASCL1_594","MEIS2_262","MITF_707","GRHL2_693",
+                  "YY2_744","SIX1_405","TFAP2A_739","PAX6_14","NR2F2_399",
+                  "RFX3_725","SP4_177","FOXD2_604","Atoh1_306","NEUROG2_162",
+                  "SCRT1_727","Rarg_344","PITX2_526","SOX9_20","PHOX2B_720","ETV4_682",
+                  "KLF2_496","ELK1_357")
+
+label_index <- which(rownames(temp_f) %in% label_motifs)
+label_text <- toupper(stringr::str_split(rownames(temp_f)[label_index], pattern = "_", simplify = T)[,1])
+
+heatmap1 <- ComplexHeatmap::Heatmap(matrix = temp_f, cluster_rows = T, 
+                        cluster_columns = T,
+                        show_row_names = F,
+                        use_raster = F, col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+plotPDF(heatmap1, name = "Plot-Motif-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap1
+```
 
 # Figure 2 - Pseudotime
 ## D
@@ -298,3 +288,4 @@ plotPDF(p3[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC =
 
 p3[[1]]
 ```
+
