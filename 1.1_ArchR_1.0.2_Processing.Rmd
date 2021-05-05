@@ -1,0 +1,75 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Running some things in 1.0.2 due to them being bugged in release.
+```{r}
+devtools::install_github("GreenleafLab/ArchR", ref="release_1.0.2", repos = BiocManager::repositories())
+```
+
+```{r}
+library(ArchR)
+library(knitr)
+library(TFBSTools)
+library(ComplexHeatmap)
+library(ggplot2)
+library(ggrepel)
+library(readr)
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+```
+
+Find Features
+```{r}
+Cluster_Peaks <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "PeakMatrix", 
+    groupBy = "Clusters",
+    bias = c("log10(nFrags)"),
+    testMethod = "wilcoxon",
+    binarize = T,
+    threads = 1)
+
+Cluster_Peaks@elementMetadata$PeakID <- paste0(Cluster_Peaks@elementMetadata$seqnames, "_",
+                                               Cluster_Peaks@elementMetadata$start, "_",
+                                               Cluster_Peaks@elementMetadata$end)
+
+PeakmarkerList <- getMarkers(Cluster_Peaks, cutOff = "FDR <= 0.001 & Log2FC > 0.5")
+PeakmarkerDF <- as.data.frame(PeakmarkerList)
+
+summary(as.factor(PeakmarkerDF$group))
+
+write_csv(PeakmarkerDF, file = "PeakMarkers.csv")
+```
+
+Plot the top 3 per cluster.
+```{r}
+top_Peaks <- PeakmarkerDF %>% dplyr::group_by(group_name) %>% dplyr::top_n(6, wt = Log2FC)
+top_Peaks$PeakID <- paste0(top_Peaks$seqnames,"_", top_Peaks$start, "_", top_Peaks$end)
+
+subset_peaks <- Cluster_Peaks[Cluster_Peaks@elementMetadata$PeakID %in% top_Peaks$PeakID]
+p2 <- plotMarkerHeatmap(
+  seMarker = subset_peaks,
+  cutOff = "FDR <= 0.0001 & Log2FC > 0.8",
+  log2Norm = F,
+  scaleTo = 10^4,
+  scaleRows = TRUE,
+  plotLog2FC = FALSE,
+  limits = c(-2, 2),
+  binaryClusterRows = TRUE,
+  clusterCols = TRUE,
+  labelMarkers = NULL,
+  nLabel = 5,
+  nPrint = 0,
+  labelRows = FALSE,
+  returnMatrix = FALSE,
+  transpose = FALSE,
+  invert = FALSE)
+
+plotPDF(p2, name = "top_enhancer_candidates.pdf", width = 6, height = 8)
+
+```
+

@@ -1,0 +1,94 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: 
+    toc: yes
+    code_folding: hide
+    fig_width: 8
+    fig_height: 6
+editor_options:
+  chunk_output_type: inline
+---
+
+Exploration of building GRN's using scATAC data.
+
+So basically, the idea is to combine the positive/negative regulator prediction from motif presence and peak activity over time to build a network of transcription factor regulation. This way, we can assign an average strength and direction to the motif presence within any given peak. 
+
+There are a few ways we wish to filter this. 1. We want to look at highly specific peaks. 2. We want to consider only those highly specific peaks that also are linked to specific genes (via Genescore). These may be too restrictive initially, but we will see! 
+```{r Loading libraries and data, message=FALSE, warning=FALSE}
+library(ArchR)
+library(knitr)
+library(TFBSTools)
+library(ComplexHeatmap)
+library(ggplot2)
+library(ggrepel)
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+
+```
+
+
+
+```{r}
+cA <- getCoAccessibility(
+    ArchRProj = projNC,
+    corCutOff = 0.5,
+    resolution = 1,
+    returnLoops = F)
+
+# Which coAccessible elements are in differentially enriched peaks?
+summary(cA$queryHits %in% PeakmarkerDF$idx | cA$subjectHits %in% PeakmarkerDF$idx)
+
+lookup_idx <- PeakmarkerDF[,c("idx","PeakID")]
+
+cA_PeakMarkers <- cA[cA$queryHits %in% PeakmarkerDF$idx | cA$subjectHits %in% PeakmarkerDF$idx,]
+cA_PeakMarkers$Peak1 <- qdapTools::lookup(terms = cA_PeakMarkers$queryHits, lookup_idx)
+
+PeakmarkerDF$idx
+library(Seurat)
+library(Signac)
+library(BSgenome.Ggallus.ENSEMBL.galGal6)
+library(GenomicFeatures)
+library(org.Gg.eg.db)
+# Make a blacklist for AADN05001427.1
+arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
+# Manually remove noncontigous chromosomes.
+arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
+TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
+
+ClosestFeature_e <- edit(Signac::ClosestFeature)
+
+
+ClosestFeature_e <- function(gene_object, regions) {
+    nearest_feature <- distanceToNearest(x = regions, subject = gene_object)
+    feature_hits <- gene_object[subjectHits(x = nearest_feature)]
+    df <- as.data.frame(x = mcols(x = feature_hits))
+    df$closest_region <- Signac::GRangesToString(grange = feature_hits)
+    df$query_region <- Signac::GRangesToString(grange = regions)
+    df$distance <- mcols(x = nearest_feature)$distance
+}
+
+res <- ClosestFeature_e(arch_gg6_genes$genes, regions = cA$CoAccessibility)
+
+Signac::GRangesToString(cA$CoAccessibility, sep = c("_","_"))
+nearest_feature <- distanceToNearest(x = cA$CoAccessibility, subject = arch_gg6_genes$genes, ignore.strand = T)
+
+
+feature_hits <- arch_gg6_genes$genes[subjectHits(x = nearest_feature)]
+feature_hits
+df <- as.data.frame(x = mcols(x = feature_hits))
+df$closest_region <- Signac::GRangesToString(grange = feature_hits)
+df$query_region <- Signac::GRangesToString(grange = cA$CoAccessibility)
+df$distance <- mcols(x = nearest_feature)$distance
+df$query_region <- gsub(pattern = "-", replacement = "_", df$query_region)
+df$closest_region <- gsub(pattern = "-", replacement = "_", df$closest_region)
+
+# Subset to find regions that are in top Peaks and their associated genes.
+df[PeakmarkerDF$PeakID %in% df$query_region,]
+
+summary(PeakmarkerDF$PeakID %in% df$query_region)
+arch_gg6_genes$genes
+```

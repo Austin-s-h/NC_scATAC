@@ -3,6 +3,50 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+```{r}
+library(ArchR)
+library(knitr)
+library(TFBSTools)
+library(ComplexHeatmap)
+library(ggplot2)
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
+```
+
+Identification of Marker Genes
+```{r}
+markersGS <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "GeneScoreMatrix", 
+    groupBy = "Clusters",
+    bias = c("TSSEnrichment", "log10(nFrags)"),
+    testMethod = "wilcoxon")
+
+GS_df <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.01 & Log2FC >= 1"))
+write.csv(GS_df, file = "temp_GeneScores.csv")
+
+# It's important to look at local regions when considering genescores.
+# Let's look at a few locations.
+p1 <- plotBrowserTrack(
+    ArchRProj = projNC, 
+    groupBy = "Clusters", 
+    geneSymbol = c("DLX4","SLC26A9","CLDN9"), 
+    upstream = 50000,
+    downstream = 50000,
+    loops = getCoAccessibility(projNC, corCutOff = 0.7))
+
+grid::grid.newpage()
+grid::grid.draw(p1$DLX4)
+
+```
+Let's see if there are any highly correlated motifs to genescores
+```{r}
+
+```
+
 
 ```{r}
 
@@ -71,40 +115,30 @@ output: html_notebook
 #               rastr = F)
 ```
 
-
-Correlation of Motifs to GeneMatrix
+Identification of Marker Peaks
 ```{r}
-seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
-seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
-rowData(seZ)$maxDelta <- lapply(seq_len(ncol(seZ)), function(x){
-  rowMaxs(assay(seZ) - assay(seZ)[,x])
-}) %>% Reduce("cbind", .) %>% rowMaxs
+# getMarkerFeatures on Peaks is broken until 1.0.2
+markersPeaks_C1 <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "PeakMatrix", 
+    groupBy = "Clusters",
+    bias = c("TSSEnrichment", "log10(nFrags)"),
+    testMethod = "wilcoxon", useGroups = "C1")
 
-corGSM_MM <- correlateMatrices(
-    ArchRProj = projNC,
-    useMatrix1 = "GeneScoreMatrix",
-    useMatrix2 = "MotifMatrix",
-    reducedDims = "IterativeLSI")
+GS_df <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.01 & Log2FC >= 1"))
+write.csv(GS_df, file = "temp_GeneScores.csv")
 
-corGSM_MM$maxDelta <- rowData(seZ)[match(corGSM_MM$MotifMatrix_name, rowData(seZ)$name), "maxDelta"]
+# It's important to look at local regions when considering genescores.
+# Let's look at a few locations.
+p1 <- plotBrowserTrack(
+    ArchRProj = projNC, 
+    groupBy = "Clusters", 
+    geneSymbol = c("DLX4","SLC26A9","CLDN9"), 
+    upstream = 50000,
+    downstream = 50000,
+    loops = getCoAccessibility(projNC, corCutOff = 0.7))
 
-corGSM_MM <- corGSM_MM[order(abs(corGSM_MM$cor), decreasing = TRUE), ]
-corGSM_MM <- corGSM_MM[which(!duplicated(gsub("\\-.*","",corGSM_MM[,"MotifMatrix_name"]))), ]
-corGSM_MM$TFRegulator <- "NO"
-corGSM_MM$TFRegulator[which(corGSM_MM$cor > 0.4 & corGSM_MM$padj < 0.05 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "YES"
-sort(corGSM_MM[corGSM_MM$TFRegulator=="YES",1])
+grid::grid.newpage()
+grid::grid.draw(p1$DLX4)
 
-p5 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator)) +
-  geom_point() + 
-  theme_ArchR() +
-  geom_vline(xintercept = 0, lty = "dashed") + 
-  scale_color_manual(values = c("NO"="darkgrey", "YES"="firebrick3")) +
-  xlab("Correlation To Gene Score") +
-  ylab("Max TF Motif Delta") +
-  scale_y_continuous(
-    expand = c(0,0), 
-    limits = c(0, max(corGSM_MM$maxDelta)*1.05)
-  )
-
-p5
 ```

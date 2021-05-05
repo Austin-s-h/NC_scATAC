@@ -273,7 +273,7 @@ projNC <- addGeneScoreMatrix(
   extendDownstream = c(5000,1e+05),
   geneUpstream = 2000, force = T)
 
-projNC <- addImputeWeights(projNC)
+projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
 
 
 markersGS <- getMarkerFeatures(

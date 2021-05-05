@@ -23,7 +23,6 @@
 packrat/lib*/
 
 # Packrat custom libraries
-packrat/src/
 
 # RStudio files
 .Rproj.user/

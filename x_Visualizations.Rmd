@@ -17,6 +17,7 @@ library(knitr)
 library(TFBSTools)
 library(ComplexHeatmap)
 library(ggplot2)
+library(ggrepel)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
@@ -278,14 +279,580 @@ heatmap1
 ```
 
 # Figure 2 - Pseudotime
-## D
+## A
 A two-dimensional UMAP projection colored by real timepoint-normalized pseudotime projections
 ```{r}
-p3 <- plotTrajectory(projNC, trajectory = "hour_adj_pseudotime",
+projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
+
+p9 <- plotTrajectory(projNC, trajectory = "hour_adj_pseudotime",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p3[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
-p3[[1]]
+p9[[1]]
+```
+## B
+Motifs that change over pseudotime.
+Highlighting the mesencyhme, neural 1, neural 2, and sensory ganglia lineages.
+First we have to isolate the cells of that lineage to perform the analysis on.
+```{r}
+
+matrix_agg_scores <- function(input = sm_mat, transpose = T) {
+  ## A function to aggregate motif scores by family.
+  
+  if (transpose){
+    input <- t(input)
+  }
+  # Convert to DF
+  input <- as.data.frame(input)
+  # Clean up names
+  colnames(input) <- toupper(colnames(input))
+  
+  # GRHL
+  if (any(c("GRHL1","GRHL2","GRHL3") %in% colnames(input))){
+    print("Collapsing GRHL's")
+    # Which are present?
+    select <- c("GRHL1","GRHL2","GRHL3")[c("GRHL1","GRHL2","GRHL3") %in% colnames(input)]
+    GRHL_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$GRHL_Family <- GRHL_Family
+  }
+  # TEAD
+  if (any(c("TEAD1","TEAD2","TEAD3","TEAD4") %in% colnames(input))){
+    print("Collapsing TEAD's")
+    # Which are present?
+    select <- c("TEAD1","TEAD2","TEAD3","TEAD4")[c("TEAD1","TEAD2","TEAD3","TEAD4") %in% colnames(input)]
+    TEAD_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$TEAD_Family <- TEAD_Family
+  }
+  
+  # TFAP2
+  if (any(grep(pattern = "TFAP2", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing TAFP2's")
+    select <- grep(pattern = "TFAP2", colnames(input), value = T)[grep(pattern = "TFAP2", colnames(input), value = T) %in% colnames(input)]
+    TFAP2_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$TFAP2_Family <- TFAP2_Family
+  }  
+  
+  # SANI
+  if (any(c("SNAI1", "SNAI2","SNAI3") %in% colnames(input))){
+    print("Collapsing SANI's")
+    # Which are present?
+    select <- c("SNAI1", "SNAI2","SNAI3")[c("SNAI1", "SNAI2","SNAI3") %in% colnames(input)]
+    SANI_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SANI_Family <- SANI_Family
+  }   
+  
+  # SOXB
+  if (any(c("SOX1", "SOX2","SOX3") %in% colnames(input))){
+    print("Collapsing SOXB's")
+    # Which are present?
+    select <- c("SOX1", "SOX2","SOX3")[c("SOX1", "SOX2","SOX3") %in% colnames(input)]
+    SOXB_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SOXB_Family <- SOXB_Family
+  }
+  
+  # SOXD
+  if (any(c("SOX5", "SOX6","SOX13") %in% colnames(input))){
+    print("Collapsing SOXD's")
+    # Which are present?
+    select <- c("SOX5", "SOX6","SOX13")[c("SOX5", "SOX6","SOX13") %in% colnames(input)]
+    SOXD_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SOXD_Family <- SOXD_Family
+  }
+  
+  # SOXE
+  if (any(c("SOX8", "SOX9","SOX10") %in% colnames(input))){
+    print("Collapsing SOXE's")
+    # Which are present?
+    select <- c("SOX8", "SOX9","SOX10")[c("SOX8", "SOX9","SOX10") %in% colnames(input)]
+    SOXE_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SOXE_Family <- SOXE_Family
+  }
+  
+  # SOXF
+  if (any(c("SOX7", "SOX17","SOX18") %in% colnames(input))){
+    print("Collapsing SOXF's")
+    # Which are present?
+    select <- c("SOX7", "SOX17","SOX18")[c("SOX7", "SOX17","SOX18") %in% colnames(input)]
+    SOXF_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SOXF_Family <- SOXF_Family
+  }
+  
+  # NR2F
+  if (any(grep(pattern = "NR2F", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing NR2F's")
+    select <- grep(pattern = "NR2F", colnames(input), value = T)[grep(pattern = "NR2F", colnames(input), value = T) %in% colnames(input)]
+    NR2F_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$NR2F_Family <- NR2F_Family
+  } 
+  
+  # SP
+  if (any(c("SP1", "SP2","SP3","SP4","SP8","SP9") %in% colnames(input))){
+    print("Collapsing SP's")
+    # Which are present?
+    select <- c("SP1", "SP2","SP3","SP4","SP8","SP9")[c("SP1", "SP2","SP3","SP4","SP8","SP9") %in% colnames(input)]
+    SP_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SP_Family <- SP_Family
+  }
+  
+  # FOX
+  if (any(grep(pattern = "FOX", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing FOX's")
+    select <- grep(pattern = "FOX", colnames(input), value = T)[grep(pattern = "FOX", colnames(input), value = T) %in% colnames(input)]
+    FOX_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$FOX_Family <- FOX_Family
+  } 
+  
+  # KLF
+  if (any(grep(pattern = "KLF", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing KLF's")
+    select <- grep(pattern = "KLF", colnames(input), value = T)[grep(pattern = "KLF", colnames(input), value = T) %in% colnames(input)]
+    KLF_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$KLF_Family <- KLF_Family
+  } 
+  
+  # RFX
+  if (any(grep(pattern = "RFX", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing RFX's")
+    select <- grep(pattern = "RFX", colnames(input), value = T)[grep(pattern = "RFX", colnames(input), value = T) %in% colnames(input)]
+    RFX_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$RFX_Family <- RFX_Family
+  } 
+  
+  # RXR
+  if (any(grep(pattern = "RFR", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing RFR's")
+    select <- grep(pattern = "RFR", colnames(input), value = T)[grep(pattern = "RFR", colnames(input), value = T) %in% colnames(input)]
+    RFR_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$RFR_Family <- RFR_Family
+  } 
+  
+  # SIX
+  if (any(grep(pattern = "SIX", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing SIX's")
+    select <- grep(pattern = "SIX", colnames(input), value = T)[grep(pattern = "SIX", colnames(input), value = T) %in% colnames(input)]
+    SIX_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$SIX_Family <- SIX_Family
+  }
+  
+  # ETV
+  if (any(grep(pattern = "ETV", colnames(input), value = T) %in% colnames(input))){
+    print("Collapsing ETV's")
+    select <- grep(pattern = "ETV", colnames(input), value = T)[grep(pattern = "ETV", colnames(input), value = T) %in% colnames(input)]
+    ETV_Family <- Matrix::rowMeans(input[,select])
+    input <- input[!colnames(input) %in% select]
+    input$ETV_Family <- ETV_Family
+  }
+  
+  return(input)
+}
+
+
+# Cell names along mesenchyme trajectory
+mes_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C8","C10")]
+
+which(projNC$cellNames %in% mes_cells)
+# Motif scores per cell
+motif_mat <- getMatrixFromProject(projNC,
+                                  useMatrix = "MotifMatrix",
+                                  useSeqnames = "z")
+motif_mat_raw <- assay(motif_mat)
+motif_mat_impute <- imputeMatrix(mat = motif_mat_raw,
+                                 imputeWeights = getImputeWeights(projNC))
+# Order columns by pseudotime.
+mes_cells_df <- data.frame(Name = mes_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in% c("C4","C3","C8","C10")])
+mes_cells_df <- mes_cells_df[order(mes_cells_df$Pseudotime),]
+
+motif_mat_impute_ord <- as.matrix(motif_mat_impute[,mes_cells_df$Name])
+# Collapse by motif family.
+rownames(motif_mat_impute_ord) <- stringr::str_split(rownames(motif_mat_impute_ord), pattern = "_", simplify = T)[,1]
+
+motif_mat_impute_ord <- t(matrix_agg_scores(motif_mat_impute_ord))
+
+
+# Filter to only enriched TF's
+mes_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C3","C8","C10"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+mes_motif_df <- as.data.frame(getMarkers(mes_Motifs, cutOff = "FDR <= 1e-20 & MeanDiff > 2"))
+
+selected_motifs <- toupper(unique(mes_motif_df$name))
+selected_motifs <- stringr::str_split(selected_motifs, pattern = "_", simplify = T)[,1]
+
+# Remove motifs NOT in the family-collapsed matrix.
+selected_motifs <- selected_motifs[selected_motifs %in% rownames(motif_mat_impute_ord)]
+
+# Add in the family names
+selected_motifs <- c(selected_motifs, grep("_Family", rownames(motif_mat_impute_ord), value = T))
+
+labels <- c("ETS1","RXRG","NR2F_Family","TWIST1",
+            "ZBTB18","TFAP2_Family","JUNB",
+            "FOSL1..JUN","FLI1","SOXE_Family")
+
+labels[!labels %in% selected_motifs]
+
+label_index <- which(selected_motifs %in% labels)
+
+
+heatmap3 <- ComplexHeatmap::Heatmap(
+  matrix = motif_mat_impute_ord[selected_motifs,],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Mesenchyme",
+  col = as.character(ArchRPalettes$blueYellow)) +
+  rowAnnotation(names = anno_mark(at = label_index, labels = labels))
+
+selected_motifs[row_order(heatmap3)]
+
+
+plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap3
 ```
 
+```{r}
+# Cell names along Neural 1 trajectory
+neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C5")]
+
+which(projNC$cellNames %in% neural1_cells)
+
+# Order columns by pseudotime.
+neural1_cells_df <- data.frame(Name = neural1_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C3","C5")])
+
+neural1_cells_df <- neural1_cells_df[order(neural1_cells_df$Pseudotime),]
+
+ordered_neural1 <- as.matrix(motif_mat_impute[,neural1_cells_df$Name])
+# Collapse by motif family.
+rownames(ordered_neural1) <- stringr::str_split(rownames(ordered_neural1), pattern = "_", simplify = T)[,1]
+
+ordered_neural1 <- t(matrix_agg_scores(ordered_neural1))
+
+# Filter to only enriched TF's
+neural1_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C4","C3","C5"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+neural1_motif_df <- as.data.frame(getMarkers(neural1_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1"))
+
+selected_motifs <- toupper(unique(mes_motif_df$name))
+selected_motifs <- stringr::str_split(selected_motifs, pattern = "_", simplify = T)[,1]
+
+# Remove motifs NOT in the family-collapsed matrix.
+selected_motifs <- selected_motifs[selected_motifs %in% rownames(motif_mat_impute_ord)]
+
+# Add in the family names
+selected_motifs <- c(selected_motifs, grep("_Family", rownames(motif_mat_impute_ord), value = T))
+
+labels <- c("RFX_Family","Pou5f1..Sox2_38","ZIC_Family","RBPJL",
+            "SCRT2","SNAI_Family","LHX4","TBX1","MEIS2",
+            "EOMES","PBX3","SOXE_Family")
+
+labels[!labels %in% selected_motifs]
+label_index <- which(selected_motifs %in% labels)
+
+
+heatmap3 <- ComplexHeatmap::Heatmap(
+  matrix = motif_mat_impute_ord[selected_motifs,],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Mesenchyme",
+  col = as.character(ArchRPalettes$blueYellow)) +
+  rowAnnotation(names = anno_mark(at = label_index, labels = labels))
+
+selected_motifs[row_order(heatmap3)]
+
+labels <- c("RFX1_724","Pou5f1..Sox2_38","ZIC1_190",
+            "Rbpjl_585","SCRT2_728","SNAI2_729","Lhx4_194",
+            "MEIS2_262","PBX3_401","SOX10_407","POU3F1_274",
+            "RFX2_283","TBX1_295","EOMES_290")
+label_index <- which(unique(neural1_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(neural1_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap4 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_neural1[unique(neural1_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Neural 1",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(neural1_motif_df$name)[row_order(heatmap4)]
+
+
+plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap4
+```
+
+```{r}
+# Cell names along Neural 2 trajectory
+neural2_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C6","C7")]
+
+which(projNC$cellNames %in% neural2_cells)
+
+# Order columns by pseudotime.
+neural2_cells_df <- data.frame(Name = neural2_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C6","C7")])
+
+neural2_cells_df <- neural2_cells_df[order(neural2_cells_df$Pseudotime),]
+
+ordered_neural2 <- as.matrix(motif_mat_impute[,neural2_cells_df$Name])
+
+# Filter to only enriched TF's
+neural2_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C4","C6","C7"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+neural2_motif_df <- as.data.frame(getMarkers(neural2_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("OTX2_718","Pou5f1..Sox2_38","Dmbx1_366",
+            "PITX2_526","SOX2_730","Arid3a_43","PHOX2A_204",
+            "Shox2_211","GBX1_372","GATA1_690")
+
+label_index <- which(unique(neural2_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(neural2_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap5 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_neural2[unique(neural2_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Neural 2",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(neural2_motif_df$name)[row_order(heatmap5)]
+
+
+plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap5
+```
+
+```{r}
+# Cell names along sensory ganglia trajectory
+sensory_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C2")]
+
+which(projNC$cellNames %in% sensory_cells)
+
+# Order columns by pseudotime.
+sensory_cells_df <- data.frame(Name = sensory_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C2")])
+
+sensory_cells_df <- sensory_cells_df[order(sensory_cells_df$Pseudotime),]
+
+ordered_sensory <- as.matrix(motif_mat_impute[,sensory_cells_df$Name])
+
+# Filter to only enriched TF's
+sensory_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C2"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+sensory_motif_df <- as.data.frame(getMarkers(sensory_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("GRHL2_693","ASCL1.var.2_639","ZEB1_412",
+            "SNAI2_729","SIX1_405","DLX5_464",
+            "MEOX2_196","ISL2_388","TEAD4_738",
+            "GATA2_390")
+
+label_index <- which(unique(sensory_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(sensory_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap6 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_sensory[unique(sensory_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Sensory",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(sensory_motif_df$name)[row_order(heatmap6)]
+
+
+plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap6
+```
+```{r}
+# Highlighting Specific Motifs across each branch
+# Three per branch.
+
+# Add if colorBy = "MotifMatrix" to pass in useSeqnames = "z" by default.
+# plotTrajectoryCustom <- edit(plotTrajectory)
+
+# Genescores too
+genes <- c("GRHL3","ASCL1","DLX5")
+plotting_genes <- getFeatures(projNC, select = paste(genes, collapse="|"), useMatrix = "GeneScoreMatrix")
+
+# p10 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix", name = plotting_genes, continuousSet = "blueYellow", plotAs = "points", addArrow = F, embedding = "UMAP")
+
+#Now we gotta do some individual line plots.
+library(reshape2)
+data <- total_dev_mes3[rownames(total_dev_mes3) %in% top_differential_motifs_df$name,]
+rownames(data)
+
+data <- melt(data)
+data$Pseudotime <- qdapTools::lookup(data$Var2, lookup)
+
+data_sub <- subset(data, data$Var1 %in% c("SOX2","SOX9","RXRG","TWIST1","ZIC5"))
+
+# order by cell
+data_sub <- data_sub %>%
+    arrange(match(Var2, as.character(lookup2$cell)))
+
+
+ggplot(data_sub, aes(x = Var2, y = as.numeric(value),
+                     color = Pseudotime, group = Var1)) + 
+  geom_point() + 
+  geom_smooth(color = "black") +
+  scale_color_viridis_c(option = "C") + 
+  facet_wrap(. ~ Var1, ncol = 1, scales = "free_y") + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  xlab("Cells in Pseudotime") +
+  ylab("ChromVAR Deviation Score")
+
+```
+
+Let's look at geneScores for some of the top motifs and compare them.
+
+```{r}
+motif_to_hi <- c("SOX8", "TWIST1","RFX2","ZIC1","OTX2","Dmbx1","YY2","RFX3","GRHL3")
+
+plotting_motifs2 <- getFeatures(projNC, select = paste(motif_to_hi, collapse="|"), useMatrix = "MotifMatrix")
+
+plotting_motifs_z2 <- paste0("z:",plotting_motifs2)
+
+
+motif_highlights <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_motifs_z2,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     randomize = F,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1)
+
+plotting_genes2 <- getFeatures(projNC, select = paste(motif_to_hi, collapse="|"), useMatrix = "GeneScoreMatrix")
+
+gene_highlights <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "GeneScoreMatrix",
+                                     name = plotting_genes2,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     randomize = F,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1)
+
+
+combined <- cowplot::plot_grid(motif_highlights[[1]],gene_highlights[[8]],
+                               motif_highlights[[7]],gene_highlights[[9]],
+                               motif_highlights[[3]],gene_highlights[[7]],
+                               motif_highlights[[5]],gene_highlights[[1]],
+                               ncol = 2)
+
+combined2 <- cowplot::plot_grid(motif_highlights[[6]],gene_highlights[[6]],
+                               motif_highlights[[8]],gene_highlights[[2]],
+                               motif_highlights[[9]],gene_highlights[[5]],
+                               ncol = 2)
+plotPDF(combined, name = "Plot-Motif-GeneScore-UMAP-Projection-1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 12)
+plotPDF(combined2, name = "Plot-Motif-GeneScore-UMAP-Projection-2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 12)
+```
+
+# Figure 3
+## A
+DiffTF-like correlation of TF expression to accessibility of peaks that contain their motif.
+
+```{r}
+seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
+
+rowData(seZ)$maxDelta <- lapply(seq_len(ncol(seZ)), function(x){
+  rowMaxs(assay(seZ) - assay(seZ)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM <- correlateMatrices(
+    ArchRProj = projNC,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM$maxDelta <- rowData(seZ)[match(corGSM_MM$MotifMatrix_name, rowData(seZ)$name), "maxDelta"]
+
+corGSM_MM <- corGSM_MM[order(abs(corGSM_MM$cor), decreasing = TRUE), ]
+corGSM_MM <- corGSM_MM[which(!duplicated(gsub("\\-.*","",corGSM_MM[,"MotifMatrix_name"]))), ]
+corGSM_MM$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM$TFRegulator[which(corGSM_MM$cor > 0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM$TFRegulator[which(corGSM_MM$cor < -0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM[corGSM_MM$TFRegulator=="Positive",1])
+
+corGSM_MM$label <- ifelse(corGSM_MM$TFRegulator %in% c("Positive","Negative"), corGSM_MM$GeneScoreMatrix_name, "")
+
+p11 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p11, name = "Plot-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p11
+```
