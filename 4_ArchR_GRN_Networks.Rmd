@@ -15,6 +15,8 @@ Exploration of building GRN's using scATAC data.
 So basically, the idea is to combine the positive/negative regulator prediction from motif presence and peak activity over time to build a network of transcription factor regulation. This way, we can assign an average strength and direction to the motif presence within any given peak. 
 
 There are a few ways we wish to filter this. 1. We want to look at highly specific peaks. 2. We want to consider only those highly specific peaks that also are linked to specific genes (via Genescore). These may be too restrictive initially, but we will see! 
+
+So it turns out the Genescore isn't related to the peak coaccessability at all. It's based on tile-matrix.
 ```{r Loading libraries and data, message=FALSE, warning=FALSE}
 library(ArchR)
 library(knitr)
@@ -22,73 +24,104 @@ library(TFBSTools)
 library(ComplexHeatmap)
 library(ggplot2)
 library(ggrepel)
-
-addArchRThreads(threads = 62) 
-set.seed(1)
-projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
-
-```
-
-
-
-```{r}
-cA <- getCoAccessibility(
-    ArchRProj = projNC,
-    corCutOff = 0.5,
-    resolution = 1,
-    returnLoops = F)
-
-# Which coAccessible elements are in differentially enriched peaks?
-summary(cA$queryHits %in% PeakmarkerDF$idx | cA$subjectHits %in% PeakmarkerDF$idx)
-
-lookup_idx <- PeakmarkerDF[,c("idx","PeakID")]
-
-cA_PeakMarkers <- cA[cA$queryHits %in% PeakmarkerDF$idx | cA$subjectHits %in% PeakmarkerDF$idx,]
-cA_PeakMarkers$Peak1 <- qdapTools::lookup(terms = cA_PeakMarkers$queryHits, lookup_idx)
-
-PeakmarkerDF$idx
 library(Seurat)
 library(Signac)
 library(BSgenome.Ggallus.ENSEMBL.galGal6)
 library(GenomicFeatures)
 library(org.Gg.eg.db)
-# Make a blacklist for AADN05001427.1
-arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
-# Manually remove noncontigous chromosomes.
-arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
+library(qdapTools)
+library(stringr)
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
 arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
+ensembl2symbol <- as.data.frame(mcols(arch_gg6_genes$genes))
+```
 
-ClosestFeature_e <- edit(Signac::ClosestFeature)
+Let's explore the CoAccessibility object. Specifically, we are looking for a way to link peaks to genes. I think the easiest way is just to check if either of the peaks overlap the gene's promoter region (-5kb to +1kb).
+
+```{r}
+
+peakset <- getPeakSet(projNC)
+All_Peak_Regions <- as.data.frame(peakset)
+All_Peak_Regions$idx <- as.character(All_Peak_Regions$idx)
+All_Peak_Regions$PeakID <- paste0(All_Peak_Regions$seqnames, "_", All_Peak_Regions$start, "_", All_Peak_Regions$end)
+
+# Get coAccessible elements
+cA <- as.data.frame(getCoAccessibility(
+    ArchRProj = projNC,
+    corCutOff = 0.3,
+    resolution = 1,
+    returnLoops = F))
+
+# Annotate with PeakID
+b <- All_Peak_Regions[,c("idx","PeakID")]
+b <- b[cA$queryHits,]
+cA$Peak1 <- b$PeakID
+c <- All_Peak_Regions[,c("idx","PeakID")]
+c <- c[cA$subjectHits,]
+cA$Peak2 <- c$PeakID
+
+# Make a GRange object with promoters.
+galGal6_prom <- trim(promoters(genes(TxDb_galGal6), upstream = 5000, downstream = 1000))
+galGal6_prom$gene_symbol <- lookup(terms = galGal6_prom$gene_id, key.match = ensembl2symbol)
+
+# Which coAccessible elements have a peak in a promoter?
+Peak1_coords <- str_split(cA$Peak1, pattern = "_", n = 3, simplify = T)
+Peak1_ovl <- makeGRangesFromDataFrame(df = data.frame(chr = Peak1_coords[,1],
+                                                      start = Peak1_coords[,2],
+                                                      end = Peak1_coords[,3]))
+hits <- findOverlaps(Peak1_ovl, galGal6_prom)
+
+Peak1_ovl$gene_id <- ifelse(Peak1_ovl %in% Peak1_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
 
 
-ClosestFeature_e <- function(gene_object, regions) {
-    nearest_feature <- distanceToNearest(x = regions, subject = gene_object)
-    feature_hits <- gene_object[subjectHits(x = nearest_feature)]
-    df <- as.data.frame(x = mcols(x = feature_hits))
-    df$closest_region <- Signac::GRangesToString(grange = feature_hits)
-    df$query_region <- Signac::GRangesToString(grange = regions)
-    df$distance <- mcols(x = nearest_feature)$distance
+Peak2_coords <- str_split(cA$Peak2, pattern = "_", n = 3, simplify = T)
+Peak2_ovl <- makeGRangesFromDataFrame(df = data.frame(chr = Peak2_coords[,1],
+                                                      start = Peak2_coords[,2],
+                                                      end = Peak2_coords[,3]))
+hits2 <- findOverlaps(Peak2_ovl, galGal6_prom)
+
+Peak2_ovl$gene_id <- ifelse(Peak2_ovl %in% Peak2_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
+
+cA$Overlap1 <- Peak1_ovl$gene_id
+cA$Overlap2 <- Peak2_ovl$gene_id
+
+# Annotate as Distal-Distal, Distal-Prom, or Prom-Prom
+cA$Overlap_Type <- ifelse(is.na(cA$Overlap1) & is.na(cA$Overlap2), "Distal-Distal",
+                          ifelse(!is.na(cA$Overlap1) & !is.na(cA$Overlap2), "Promoter-Promoter", "Distal-Promoter"))
+
+
+
+
+
+CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.5){
+  # A function to select identify all of the peaks that are associated with a certain gene given a correlation cutoff.
+  # Inputs
+  # coaccess - A formatted coaccessability report with at least Peak1, Peak2, Overlap1, Overlap2, and correlation.
+  # goi - Gene of Interest, an ENSEMBL ID of a gene you wish to find peaks associated with.
+  # cutoff - a numerical variable to filter corrleation values.
+  chr <- coaccess[which(coaccess$Overlap1 == goi)[1],"seqnames"]
+  sub <- coaccess[c(which(coaccess$Overlap1 == goi),
+     which(coaccess$Overlap2 == goi)),]
+  sub <- sub[sub$correlation >= cutoff,]
+  # Remove things not on the same chromosome.
+  sub <- sub[sub$seqnames == chr,]
+  return(sub)
 }
 
-res <- ClosestFeature_e(arch_gg6_genes$genes, regions = cA$CoAccessibility)
-
-Signac::GRangesToString(cA$CoAccessibility, sep = c("_","_"))
-nearest_feature <- distanceToNearest(x = cA$CoAccessibility, subject = arch_gg6_genes$genes, ignore.strand = T)
-
-
-feature_hits <- arch_gg6_genes$genes[subjectHits(x = nearest_feature)]
-feature_hits
-df <- as.data.frame(x = mcols(x = feature_hits))
-df$closest_region <- Signac::GRangesToString(grange = feature_hits)
-df$query_region <- Signac::GRangesToString(grange = cA$CoAccessibility)
-df$distance <- mcols(x = nearest_feature)$distance
-df$query_region <- gsub(pattern = "-", replacement = "_", df$query_region)
-df$closest_region <- gsub(pattern = "-", replacement = "_", df$closest_region)
-
-# Subset to find regions that are in top Peaks and their associated genes.
-df[PeakmarkerDF$PeakID %in% df$query_region,]
-
-summary(PeakmarkerDF$PeakID %in% df$query_region)
-arch_gg6_genes$genes
+sub_cA <- CorrelatedToGene(cA, goi = "ENSGALG00000012290", cutoff = 0.3)
 ```
+
+So we also want to check out where pseudotime places factors. Order them in time by first significant activation?
+
+```{r}
+# These might be interesting and very helpful!
+Motif_In_Peaks_Summary <- readRDS("/data/Austin/10XscATAC/ArchR_data_final/Annotations/Motif-In-Peaks-Summary.rds")
+# 
+
+```
+

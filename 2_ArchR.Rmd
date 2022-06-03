@@ -504,4 +504,26 @@ cA <- getCoAccessibility(
 saveArchRProject(ArchRProj = projNC, outputDirectory = "/data/Austin/10XscATAC/ArchR_data_final", load = TRUE)
 ```
 
+## Differential Markers
+```{r}
+Peak_Markers <- getMarkerFeatures(projNC, groupBy = "Clusters", useMatrix = "PeakMatrix")
+Peak_Markers.df <- getMarkers(Peak_Markers, cutOff = "FDR <= 0.05 & Log2FC >= 0.5")
+Peak_Markers.df <- as(unlist(Peak_Markers.df), "data.frame")
+Peak_Markers.df$Cluster <- stringr::str_split(rownames(Peak_Markers.df), pattern = fixed("."), simplify = T)[,1]
+write_csv(Peak_Markers.df, file = "Figure_Exports/Peak_Markers.csv")
+
+# Export each cluster as a bed file
+for (cl in unique(Peak_Markers.df$Cluster)){
+  bed <- Peak_Markers.df[Peak_Markers.df$Cluster == cl,c("seqnames","start","end")]
+  export.bed(bed, con = paste0("Figure_Exports/Peak_Marker_Beds/",cl,".bed"))
+}
+
+Gene_Markers <- getMarkerFeatures(projNC, groupBy = "Clusters", useMatrix = "GeneScoreMatrix")
+Gene_Markers.df <- getMarkers(Gene_Markers, cutOff = "FDR <= 0.05 & Log2FC >= 0.5")
+Gene_Markers.df <- as(unlist(Gene_Markers.df), "data.frame")
+Gene_Markers.df$Cluster <- stringr::str_split(rownames(Gene_Markers.df), pattern = fixed("."), simplify = T)[,1]
+write_csv(Gene_Markers.df, file = "Figure_Exports/Gene_Markers.csv")
+
+
+```
 

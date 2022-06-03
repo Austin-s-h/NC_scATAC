@@ -12,17 +12,28 @@ editor_options:
 
 
 ```{r Loading libraries and data, message=FALSE, warning=FALSE}
-library(ArchR)
-library(knitr)
-library(TFBSTools)
-library(ComplexHeatmap)
-library(ggplot2)
-library(ggrepel)
+suppressPackageStartupMessages({
+  library(ArchR)
+  library(knitr)
+  library(TFBSTools)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(ggrepel)
+  library(qdapTools)
+})
+
 
 addArchRThreads(threads = 62) 
 set.seed(1)
 projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
 projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
+projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
+cluster_to_identity <- data.frame(cluster = paste0("C",1:10),
+                                  identity = c("C1_Melanocytes","C2_Sensory_Glia","C3_Int_Mesenchyme",
+                                               "C4_Multipotent_NC","C5_Neural_2","C6_Int_Neural",
+                                               "C7_Neural_1","C8_Early_Mesenchyme","C9_Sensory_Neurons",
+                                               "C10_Late_Mesenchyme"))
+projNC$Cell_Identity <- lookup(projNC$Clusters, cluster_to_identity)
 ```
 
 # Figure 1 - Dimensionality Reduction & Clustering
@@ -49,6 +60,12 @@ p2 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
 plotPDF(p2, name = "Plot-UMAP-Clusters.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p2
+
+p3 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData", 
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(p3, name = "Plot-UMAP-Cell_Identity.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p3
 ```
 
 
@@ -75,16 +92,61 @@ motif_plot_nocutoff <- plotEmbedding(projNC,
                                      keepAxis = F,
                                      threads = 1)
 
+for (plot in seq(length(motif_plot_nocutoff))){
+  plotPDF(motif_plot_nocutoff[[plot]], name = paste0("Plot-Motif-Zscores-",plot),
+          addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
+}
 
 combined <- cowplot::plot_grid(motif_plot_nocutoff[[1]],motif_plot_nocutoff[[2]],
-             motif_plot_nocutoff[[4]],motif_plot_nocutoff[[3]],
-             motif_plot_nocutoff[[8]],motif_plot_nocutoff[[7]],
-             motif_plot_nocutoff[[10]],motif_plot_nocutoff[[9]], nrow = 2)
+                               motif_plot_nocutoff[[4]],motif_plot_nocutoff[[3]],
+                               motif_plot_nocutoff[[8]],motif_plot_nocutoff[[7]],
+                               motif_plot_nocutoff[[10]],motif_plot_nocutoff[[9]], nrow = 2)
 
+ 
 plotPDF(combined, name = "Plot-Motif-Zscores.pdf", ArchRProj = projNC, addDOC = FALSE, width = 16, height = 16)
 
 combined
 ```
+## E
+A UMAP projection of the 'end' of each lineage
+```{r}
+end1 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C2_Sensory_Glia"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end1, name = "Plot-UMAP-SensoryGlia.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end1
+
+end2 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C9_Sensory_Neurons"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end2, name = "Plot-UMAP-SensoryNeurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end2
+
+end3 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C7_Neural_1"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end3, name = "Plot-UMAP-Neural_1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end3
+
+end4 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C5_Neural_2"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end4, name = "Plot-UMAP-Neural_2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end4
+
+end5 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C10_Late_Mesenchyme"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end5, name = "Plot-UMAP-Late_Mesenchyme.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end5
+```
+
+
 # Figure S1 - QC Metrics
 We saved a pre-filtering version of our object, and use it here to show pre-filtering QC.
 
@@ -221,10 +283,14 @@ motif_plot_supp <- plotEmbedding(projNC,
                                      keepAxis = F,
                                      threads = 1)
 
+for (plot in seq(length(motif_plot_supp))){
+  plotPDF(motif_plot_supp[[plot]], name = paste0("Plot-Motif-Zscores-Supp-",plot),
+          addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
+}
 combined2 <- cowplot::plot_grid(motif_plot_supp[[9]],motif_plot_supp[[3]],
-             motif_plot_supp[[8]],motif_plot_supp[[2]],
-             motif_plot_supp[[1]],motif_plot_supp[[6]],
-             motif_plot_supp[[7]], nrow = 2)
+                                motif_plot_supp[[8]],motif_plot_supp[[2]],
+                                motif_plot_supp[[1]],motif_plot_supp[[6]],
+                                motif_plot_supp[[7]], nrow = 2)
 
 plotPDF(combined2, name = "Plot-Motif-Zscores-supp.pdf", ArchRProj = projNC, addDOC = FALSE, width = 16, height = 16)
 
@@ -282,8 +348,6 @@ heatmap1
 ## A
 A two-dimensional UMAP projection colored by real timepoint-normalized pseudotime projections
 ```{r}
-projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
-
 p9 <- plotTrajectory(projNC, trajectory = "hour_adj_pseudotime",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
@@ -293,7 +357,7 @@ p9[[1]]
 ```
 ## B
 Motifs that change over pseudotime.
-Highlighting the mesencyhme, neural 1, neural 2, and sensory ganglia lineages.
+Highlighting the mesencyhme, neural 1, neural 2, sensory ganglia, and sensory neuron lineages.
 First we have to isolate the cells of that lineage to perform the analysis on.
 ```{r}
 
@@ -533,7 +597,7 @@ plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRPr
 heatmap3
 ```
 
-```{r}
+```{r eval=FALSE}
 # Cell names along Neural 1 trajectory
 neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C5")]
 
@@ -615,7 +679,7 @@ plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 heatmap4
 ```
 
-```{r}
+```{r eval=FALSE}
 # Cell names along Neural 2 trajectory
 neural2_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C6","C7")]
 
@@ -666,7 +730,7 @@ plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 heatmap5
 ```
 
-```{r}
+```{r eval=FALSE}
 # Cell names along sensory ganglia trajectory
 sensory_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C2")]
 
@@ -717,51 +781,95 @@ plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 
 heatmap6
 ```
+
+```{r eval=FALSE}
+# Cell names along sensory neuron trajectory
+sensory_neuron_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C9")]
+
+which(projNC$cellNames %in% sensory_neuron_cells)
+
+# Order columns by pseudotime.
+sensory_neuron_cells_df <- data.frame(Name = sensory_neuron_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C9")])
+
+sensory_neuron_cells_df <- sensory_neuron_cells_df[order(sensory_neuron_cells_df$Pseudotime),]
+
+ordered_sensory <- as.matrix(motif_mat_impute[,sensory_neuron_cells_df$Name])
+
+# Filter to only enriched TF's
+sensory_neuron_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C9"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+sensory_neuron_motif_df <- as.data.frame(getMarkers(sensory_neuron_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("Foxd3_8","FOXE1_472","FOXO4_334","HAND2_646",
+            "NEUROG2.var.2_650","ATOH1.var.2_455","NEUROD1_395",
+            "Ascl2_305","GATA5_605")
+
+label_index <- which(unique(sensory_neuron_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(sensory_neuron_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap7 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_sensory[unique(sensory_neuron_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Sensory",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(sensory_neuron_motif_df$name)[row_order(heatmap7)]
+
+
+plotPDF(heatmap7, name = "Plot-sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+
+heatmap7
+```
+## C
+Individual line plots of top genes in Motif and Genescore.
 ```{r}
 # Highlighting Specific Motifs across each branch
 # Three per branch.
 
-# Add if colorBy = "MotifMatrix" to pass in useSeqnames = "z" by default.
-# plotTrajectoryCustom <- edit(plotTrajectory)
+# Sensory Glia Markers
+glia_tf <- c("ASCL1.var.2_639","GRHL2_693","DLX5_464")
+glia_genescore <- c("GRHL3","ASCL1","DLX5")
 
-# Genescores too
-genes <- c("GRHL3","ASCL1","DLX5")
-plotting_genes <- getFeatures(projNC, select = paste(genes, collapse="|"), useMatrix = "GeneScoreMatrix")
+plotting_tfs <- getFeatures(projNC, select = paste(glia_tf, collapse="|"), useMatrix = "MotifMatrix")
+plotting_genes <- getFeatures(projNC, select = paste(glia_genescore, collapse="|"), useMatrix = "GeneScoreMatrix")
 
-# p10 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix", name = plotting_genes, continuousSet = "blueYellow", plotAs = "points", addArrow = F, embedding = "UMAP")
+# Let's see if ArchR fixed it's plotting of this yet...
+# Works, but doesn't like multiple features at a time.
 
-#Now we gotta do some individual line plots.
-library(reshape2)
-data <- total_dev_mes3[rownames(total_dev_mes3) %in% top_differential_motifs_df$name,]
-rownames(data)
+# Motif Matrix for a gene within a particular trajectory
+p10 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "MotifMatrix",
+                      name = paste0("z:","GRHL2_693"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+# Genescore Matrix for a gene within a particular trajectory 
+p11 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix",
+                      name = "GRHL3", addArrow = F, plotAs = "points",
+                      rastr = F, continuousSet = "horizonExtra")
 
-data <- melt(data)
-data$Pseudotime <- qdapTools::lookup(data$Var2, lookup)
-
-data_sub <- subset(data, data$Var1 %in% c("SOX2","SOX9","RXRG","TWIST1","ZIC5"))
-
-# order by cell
-data_sub <- data_sub %>%
-    arrange(match(Var2, as.character(lookup2$cell)))
-
-
-ggplot(data_sub, aes(x = Var2, y = as.numeric(value),
-                     color = Pseudotime, group = Var1)) + 
-  geom_point() + 
-  geom_smooth(color = "black") +
-  scale_color_viridis_c(option = "C") + 
-  facet_wrap(. ~ Var1, ncol = 1, scales = "free_y") + 
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()) +
-  xlab("Cells in Pseudotime") +
-  ylab("ChromVAR Deviation Score")
+comb_umap <- ggAlignPlots(p10[[1]], p11[[1]], type = "h", draw = F)
+plotPDF(comb_umap, name = "Plot-GRHL3-C2END-Motif-Genescore-UMAP.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
+comb_line <- ggAlignPlots(p10[[2]], p11[[2]], type = "h", draw = F)
+plotPDF(comb_line,name = "Plot-GRHL3-C2END-Motif-Genescore-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
 
 ```
 
 Let's look at geneScores for some of the top motifs and compare them.
 
 ```{r}
-motif_to_hi <- c("SOX8", "TWIST1","RFX2","ZIC1","OTX2","Dmbx1","YY2","RFX3","GRHL3")
+motif_to_hi <- c("SOX8", "TWIST1","RFX2","ZIC1","OTX2","Dmbx1","YY2","RFX3","GRHL3","RFX1","RFX4")
 
 plotting_motifs2 <- getFeatures(projNC, select = paste(motif_to_hi, collapse="|"), useMatrix = "MotifMatrix")
 
@@ -793,19 +901,63 @@ gene_highlights <- plotEmbedding(projNC,
                                      threads = 1)
 
 
-combined <- cowplot::plot_grid(motif_highlights[[1]],gene_highlights[[8]],
-                               motif_highlights[[7]],gene_highlights[[9]],
-                               motif_highlights[[3]],gene_highlights[[7]],
-                               motif_highlights[[5]],gene_highlights[[1]],
+combined <- cowplot::plot_grid(motif_highlights[[1]],gene_highlights[[9]],
+                               motif_highlights[[2]],gene_highlights[[5]],
                                ncol = 2)
 
-combined2 <- cowplot::plot_grid(motif_highlights[[6]],gene_highlights[[6]],
-                               motif_highlights[[8]],gene_highlights[[2]],
-                               motif_highlights[[9]],gene_highlights[[5]],
+combined2 <- cowplot::plot_grid(motif_highlights[[3]],gene_highlights[[1]],
+                               motif_highlights[[4]],gene_highlights[[8]],
                                ncol = 2)
-plotPDF(combined, name = "Plot-Motif-GeneScore-UMAP-Projection-1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 12)
-plotPDF(combined2, name = "Plot-Motif-GeneScore-UMAP-Projection-2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 12)
+
+combined3 <- cowplot::plot_grid(motif_highlights[[6]],gene_highlights[[2]],
+                               motif_highlights[[7]],gene_highlights[[7]],
+                               ncol = 2)
+
+combined4 <- cowplot::plot_grid(motif_highlights[[9]],gene_highlights[[10]],
+                                motif_highlights[[10]],gene_highlights[[3]],
+                               ncol = 2)
+
+combined5 <- cowplot::plot_grid(motif_highlights[[11]],gene_highlights[[6]],
+                               ncol = 2)
+
+plotPDF(combined, name = "Plot-Motif-GeneScore-UMAP-Projection-1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
+plotPDF(combined2, name = "Plot-Motif-GeneScore-UMAP-Projection-2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
+plotPDF(combined3, name = "Plot-Motif-GeneScore-UMAP-Projection-3.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
+plotPDF(combined4, name = "Plot-Motif-GeneScore-UMAP-Projection-4.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
+plotPDF(combined4, name = "Plot-Motif-GeneScore-UMAP-Projection-5.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
+
+# How does the entire RFX family look?
+combined6 <- cowplot::plot_grid(motif_highlights[[3]],gene_highlights[[1]],
+                                motif_highlights[[2]],gene_highlights[[5]],
+                                motif_highlights[[9]],gene_highlights[[10]],
+                               ncol = 2)
+plotPDF(combined6, name = "Plot-Motif-GeneScore-UMAP-Projection-RFX.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
 ```
+## E 
+Integrative pseudo-time analyses.
+Let's find the best correlated Gene to Motif scores in an unbaised way.
+```{r}
+# For each lineage, find the best correlated TF+Genes
+
+for(lineage in c("C1END","C2END","C5END","C7END","C9END","C10END")){
+    END_MM  <- getTrajectory(ArchRProj = projNC, name = lineage, useMatrix = "MotifMatrix", log2Norm = FALSE)
+  END_GSM <- getTrajectory(ArchRProj = projNC, name = lineage, useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+  END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.4)
+
+  END_trajGSM2 <- END_GSM[END_MM_corGSM_MM[[1]]$name2, ]
+  END_trajMM2 <- END_MM[END_MM_corGSM_MM[[1]]$name1, ]
+  trajCombined <- END_trajGSM2
+  assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+  combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+  rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+  ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+  ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+  combined_cor_heatmap <- ht1 + ht2
+  plotPDF(combined_cor_heatmap, name = paste0(lineage,"_TF-Gene_Correlation.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+}
+```
+
 
 # Figure 3
 ## A
@@ -840,7 +992,7 @@ sort(corGSM_MM[corGSM_MM$TFRegulator=="Positive",1])
 
 corGSM_MM$label <- ifelse(corGSM_MM$TFRegulator %in% c("Positive","Negative"), corGSM_MM$GeneScoreMatrix_name, "")
 
-p11 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+p13 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, label = label)) +
   geom_point() + 
   theme_ArchR() +
   geom_vline(xintercept = 0, lty = "dashed") + 
@@ -852,7 +1004,12 @@ p11 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, lab
     limits = c(0, max(corGSM_MM$maxDelta)*1.05)
   ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
 
-plotPDF(p11, name = "Plot-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+plotPDF(p13, name = "Plot-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
 
-p11
+p13
+```
+
+
+```{r}
+
 ```
