@@ -19,11 +19,6 @@
 # Output files from R CMD check
 /*.Rcheck/
 
-# Packrat libraries
-packrat/lib*/
-
-# Packrat custom libraries
-
 # RStudio files
 .Rproj.user/
 
