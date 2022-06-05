@@ -1,6 +1,5 @@
 ---
 title: "Neural Crest single-cell ATAC-Seq Timecourse"
-output: html_notebook
 ---
 ## Part 1: Recalling Peaks with MACS3
 While 10X called peaks is sufficient to cluster cells relatively well, we would like to stick to MACS2 for our peak-calling. In this vingette, we import our 10X data and re-call peaks using MACS3 for each cluster of cells. This increases the sensitivity of peak calling. We then re-quantify signal at these peaks. New updates in Seurat 4.0/ Signac 1.1 allow us to do this ALL within R.
@@ -25,7 +24,7 @@ libraries <- c("HH6","HH8","HH10","HH12","HH14","HH16","HH18")
 ```
 
 ### Libraries and Annotation
-```{r Loading Libraries}
+```{r Loading Libraries, message=FALSE, warning=FALSE}
 library(Seurat)
 library(Signac)
 library(GenomeInfoDb)
@@ -49,7 +48,7 @@ annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
 ```
 
 ### Sample processing
-Seven timepoints, each processed individually.
+Seven time points, each processed individually.
 Rough cutoff for cell filtering. Finer cutoffs will be performed after re-quantification at MACS3 peaks.
 ```{r Process Each Sample}
 count <- 0

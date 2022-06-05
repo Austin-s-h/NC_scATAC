@@ -1,6 +1,5 @@
 ---
 title: "R Notebook"
-output: html_notebook
 ---
 
 Running some things in 1.0.2 due to them being bugged in release.

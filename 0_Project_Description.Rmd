@@ -1,6 +1,5 @@
 ---
 title: "Neural Crest single-cell ATAC-Seq Timecourse"
-output: html_notebook
 ---
 
 ## Part 0: Project Description
