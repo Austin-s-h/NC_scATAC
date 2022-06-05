@@ -152,7 +152,6 @@ end5
 We saved a pre-filtering version of our object, and use it here to show pre-filtering QC.
 
 ## Prep
-
 ```{r}
 library(ArchR)
 library(knitr)
@@ -235,7 +234,6 @@ p6
 ```
 ## C 
 Doublet Detection Plot
-
 ```{r}
 p7 <- plotEmbedding(ArchRProj = projNC_pre, colorBy = "cellColData", name = "DoubletCall", embedding = "UMAP", size = 1, baseSize = 14, plotAs = "points")
 
@@ -246,7 +244,6 @@ p7
 
 ## D
 Depth Plot
-
 ```{r}
 p8 <- plotGroups(
     ArchRProj = projNC_pre, 
@@ -261,6 +258,7 @@ p8 <- plotGroups(
 plotPDF(p8, name = "Prefiltered-Plot-Sample-Depth.pdf", ArchRProj = projNC_pre, addDOC = FALSE, width = 8, height = 8)
 p8
 ```
+
 ## E
 Extra motif plots of markers
 ```{r}
@@ -356,12 +354,12 @@ plotPDF(p9[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC =
 
 p9[[1]]
 ```
+
 ## B
 Motifs that change over pseudotime.
 Highlighting the mesencyhme, neural 1, neural 2, sensory ganglia, and sensory neuron lineages.
 First we have to isolate the cells of that lineage to perform the analysis on.
 ```{r}
-
 matrix_agg_scores <- function(input = sm_mat, transpose = T) {
   ## A function to aggregate motif scores by family.
   
@@ -550,7 +548,6 @@ rownames(motif_mat_impute_ord) <- stringr::str_split(rownames(motif_mat_impute_o
 
 motif_mat_impute_ord <- t(matrix_agg_scores(motif_mat_impute_ord))
 
-
 # Filter to only enriched TF's
 mes_Motifs <- getMarkerFeatures(
     ArchRProj = projNC, 
@@ -592,8 +589,7 @@ heatmap3 <- ComplexHeatmap::Heatmap(
 
 selected_motifs[row_order(heatmap3)]
 
-
-plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap3
 ```
@@ -601,8 +597,6 @@ heatmap3
 ```{r eval=FALSE}
 # Cell names along Neural 1 trajectory
 neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C5")]
-
-which(projNC$cellNames %in% neural1_cells)
 
 # Order columns by pseudotime.
 neural1_cells_df <- data.frame(Name = neural1_cells,
@@ -629,43 +623,27 @@ neural1_Motifs <- getMarkerFeatures(
 
 neural1_motif_df <- as.data.frame(getMarkers(neural1_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1"))
 
-selected_motifs <- toupper(unique(mes_motif_df$name))
+selected_motifs <- toupper(unique(neural1_motif_df$name))
 selected_motifs <- stringr::str_split(selected_motifs, pattern = "_", simplify = T)[,1]
 
 # Remove motifs NOT in the family-collapsed matrix.
-selected_motifs <- selected_motifs[selected_motifs %in% rownames(motif_mat_impute_ord)]
+selected_motifs <- selected_motifs[selected_motifs %in% rownames(ordered_neural1)]
 
 # Add in the family names
-selected_motifs <- c(selected_motifs, grep("_Family", rownames(motif_mat_impute_ord), value = T))
+selected_motifs <- c(selected_motifs, grep("_Family", rownames(ordered_neural1), value = T))
 
-labels <- c("RFX_Family","Pou5f1..Sox2_38","ZIC_Family","RBPJL",
-            "SCRT2","SNAI_Family","LHX4","TBX1","MEIS2",
-            "EOMES","PBX3","SOXE_Family")
+# Choose which transcription factors to highlight
+labels <- c("POU5F1..SOX2","RFX_Family","MEIS1.VAR.2","SOXB_Family",
+            "PBX1","MEIS2","ZIC_Family","PBX2"
+            )
 
+# Ensure labels are in selected motifs
 labels[!labels %in% selected_motifs]
 label_index <- which(selected_motifs %in% labels)
-
-
-heatmap3 <- ComplexHeatmap::Heatmap(
-  matrix = motif_mat_impute_ord[selected_motifs,],
-  cluster_rows = T, cluster_columns = F, show_column_names = F,
-  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Mesenchyme",
-  col = as.character(ArchRPalettes$blueYellow)) +
-  rowAnnotation(names = anno_mark(at = label_index, labels = labels))
-
-selected_motifs[row_order(heatmap3)]
-
-labels <- c("RFX1_724","Pou5f1..Sox2_38","ZIC1_190",
-            "Rbpjl_585","SCRT2_728","SNAI2_729","Lhx4_194",
-            "MEIS2_262","PBX3_401","SOX10_407","POU3F1_274",
-            "RFX2_283","TBX1_295","EOMES_290")
-label_index <- which(unique(neural1_motif_df$name) %in% labels)
-label_text <- stringr::str_split(unique(neural1_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
-
+label_text <- toupper(stringr::str_split(rownames(ordered_neural1[selected_motifs,])[label_index], pattern = "_", simplify = T)[,1])
 
 heatmap4 <- ComplexHeatmap::Heatmap(
-  matrix = ordered_neural1[unique(neural1_motif_df$name),],
+  matrix = ordered_neural1[selected_motifs,],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
   column_title = "Cells ordered in Pseudotime: Neural 1",
@@ -675,7 +653,7 @@ heatmap4 <- ComplexHeatmap::Heatmap(
 unique(neural1_motif_df$name)[row_order(heatmap4)]
 
 
-plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap4
 ```
@@ -726,7 +704,7 @@ heatmap5 <- ComplexHeatmap::Heatmap(
 unique(neural2_motif_df$name)[row_order(heatmap5)]
 
 
-plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap5
 ```
@@ -778,7 +756,7 @@ heatmap6 <- ComplexHeatmap::Heatmap(
 unique(sensory_motif_df$name)[row_order(heatmap6)]
 
 
-plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap6
 ```
@@ -829,7 +807,7 @@ heatmap7 <- ComplexHeatmap::Heatmap(
 unique(sensory_neuron_motif_df$name)[row_order(heatmap7)]
 
 
-plotPDF(heatmap7, name = "Plot-sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+plotPDF(heatmap7, name = "Plot-sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap7
 ```
