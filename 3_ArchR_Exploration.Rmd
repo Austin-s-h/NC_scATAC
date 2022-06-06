@@ -8,6 +8,7 @@ library(knitr)
 library(TFBSTools)
 library(ComplexHeatmap)
 library(ggplot2)
+library(parallel)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
@@ -25,21 +26,24 @@ markersGS <- getMarkerFeatures(
     testMethod = "wilcoxon")
 
 GS_df <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.01 & Log2FC >= 1"))
-write.csv(GS_df, file = "temp_GeneScores.csv")
+write.csv(GS_df, file = "Figure_Exports/GeneScores_Results_FDR0.01_Log2FC-1.csv")
+
+# Can we use an imputed gene matrix to clean things up a bit?
 
 # It's important to look at local regions when considering genescores.
 # Let's look at a few locations.
 p1 <- plotBrowserTrack(
     ArchRProj = projNC, 
     groupBy = "Clusters", 
-    geneSymbol = c("DLX4","SLC26A9","CLDN9"), 
+    geneSymbol = c("SOX10"), 
     upstream = 50000,
     downstream = 50000,
     loops = getCoAccessibility(projNC, corCutOff = 0.7))
 
-grid::grid.newpage()
-grid::grid.draw(p1$DLX4)
-
+## Initiate writing to PDF file
+pdf("./Figure_Exports/Plots/SOX10_CoAccessibility.pdf", height = 6, width = 8)
+grid::grid.draw(p1$SOX10)
+dev.off()
 ```
 Let's see if there are any highly correlated motifs to genescores
 ```{r}

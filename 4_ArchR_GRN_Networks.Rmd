@@ -44,7 +44,6 @@ ensembl2symbol <- as.data.frame(mcols(arch_gg6_genes$genes))
 Let's explore the CoAccessibility object. Specifically, we are looking for a way to link peaks to genes. I think the easiest way is just to check if either of the peaks overlap the gene's promoter region (-5kb to +1kb).
 
 ```{r}
-
 peakset <- getPeakSet(projNC)
 All_Peak_Regions <- as.data.frame(peakset)
 All_Peak_Regions$idx <- as.character(All_Peak_Regions$idx)

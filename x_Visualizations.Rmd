@@ -358,8 +358,11 @@ p9[[1]]
 ## B
 Motifs that change over pseudotime.
 Highlighting the mesencyhme, neural 1, neural 2, sensory ganglia, and sensory neuron lineages.
-First we have to isolate the cells of that lineage to perform the analysis on.
-```{r}
+First we have to isolate the cells of that lineage to perform the analysis on (differentially enriched).
+Then, we aggregate transcription factor signal by family to reduce noise.
+Finally, we plot a heatmap and label specific transcription factors of interest in each lineage.
+
+```{r Family Aggregation}
 matrix_agg_scores <- function(input = sm_mat, transpose = T) {
   ## A function to aggregate motif scores by family.
   
@@ -525,7 +528,9 @@ matrix_agg_scores <- function(input = sm_mat, transpose = T) {
   return(input)
 }
 
+```
 
+```{r Mesenchyme TF over pseudotime}
 # Cell names along mesenchyme trajectory
 mes_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C8","C10")]
 
@@ -594,7 +599,7 @@ plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRPr
 heatmap3
 ```
 
-```{r eval=FALSE}
+```{r Neural 1 TF over pseudotime}
 # Cell names along Neural 1 trajectory
 neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C5")]
 
@@ -658,7 +663,7 @@ plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 heatmap4
 ```
 
-```{r eval=FALSE}
+```{r Neural 2 TF over pseudotime}
 # Cell names along Neural 2 trajectory
 neural2_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C6","C7")]
 
@@ -709,8 +714,8 @@ plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 heatmap5
 ```
 
-```{r eval=FALSE}
-# Cell names along sensory ganglia trajectory
+```{r Sensory glia TF over pseudotime}
+# Cell names along sensory glia trajectory
 sensory_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C2")]
 
 which(projNC$cellNames %in% sensory_cells)
@@ -761,7 +766,7 @@ plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj 
 heatmap6
 ```
 
-```{r eval=FALSE}
+```{r Sensory neurons TF over pseudotime}
 # Cell names along sensory neuron trajectory
 sensory_neuron_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C9")]
 
@@ -806,12 +811,65 @@ heatmap7 <- ComplexHeatmap::Heatmap(
 
 unique(sensory_neuron_motif_df$name)[row_order(heatmap7)]
 
-
 plotPDF(heatmap7, name = "Plot-sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
 
 heatmap7
 ```
+
 ## C
+Individual line plots of just top Motifs for Mesenchyme branch
+```{r}
+
+interesting_mesenchyme_factors <- c("ETS1","RXRG","NR2F_Family","TWIST1",
+            "ZBTB18","TFAP2_Family","JUNB",
+            "FOSL1..JUN","FLI1","SOXE_Family")
+
+# Motif Matrix for a gene within a particular trajectory
+# TWIST1
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","TWIST1_741"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-TWIST1-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# NR2F1
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","NR2F1_220"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-NR2F1-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# ZBTB18
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","ZBTB18_192"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-ZBTB18-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# RXRG
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","RXRG_341"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-RXRG-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# FLI1
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","FLI1_133"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-FLI1-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# TFAP2B
+p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
+                      name = paste0("z:","TFAP2B_300"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(p10[[2]], name = "Plot-TFAP2B-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+```
+
+## D
 Individual line plots of top genes in Motif and Genescore.
 ```{r}
 # Highlighting Specific Motifs across each branch
@@ -828,18 +886,18 @@ plotting_genes <- getFeatures(projNC, select = paste(glia_genescore, collapse="|
 # Works, but doesn't like multiple features at a time.
 
 # Motif Matrix for a gene within a particular trajectory
-p10 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "MotifMatrix",
+p11 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "MotifMatrix",
                       name = paste0("z:","GRHL2_693"), continuousSet = "blueYellow",
                       plotAs = "points", addArrow = F)
 # Genescore Matrix for a gene within a particular trajectory 
-p11 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix",
+p12 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix",
                       name = "GRHL3", addArrow = F, plotAs = "points",
                       rastr = F, continuousSet = "horizonExtra")
 
-comb_umap <- ggAlignPlots(p10[[1]], p11[[1]], type = "h", draw = F)
+comb_umap <- ggAlignPlots(p11[[1]], p12[[1]], type = "h", draw = F)
 plotPDF(comb_umap, name = "Plot-GRHL3-C2END-Motif-Genescore-UMAP.pdf",
         ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
-comb_line <- ggAlignPlots(p10[[2]], p11[[2]], type = "h", draw = F)
+comb_line <- ggAlignPlots(p11[[2]], p12[[2]], type = "h", draw = F)
 plotPDF(comb_line,name = "Plot-GRHL3-C2END-Motif-Genescore-Line.pdf",
         ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
 
@@ -939,8 +997,33 @@ for(lineage in c("C1END","C2END","C5END","C7END","C9END","C10END")){
 
 
 # Figure 3
+Genescores
+
 ## A
+Investigation of Genescores.
+```{r}
+# Genescores on non-imputed data.
+markersGS <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "GeneScoreMatrix", 
+    groupBy = "Clusters",
+    bias = c("TSSEnrichment", "log10(nFrags)"),
+    normBy = "ReadsInPeaks",
+    testMethod = "wilcoxon")
+
+# Heatmap of all differentially enriched genes.
+plotMarkerHeatmap(seMarker = markersGS,
+                  cutOff = "FDR <= 0.01 & Log2FC >= 0.75")
+
+```
+
+
+
+## B
 DiffTF-like correlation of TF expression to accessibility of peaks that contain their motif.
+
+We can use this to identify transcription factors of interest in each lineage.
+Interested in FOXD3 'biomodal' activity.
 
 ```{r}
 seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
