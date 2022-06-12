@@ -12,7 +12,7 @@ library(parallel)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
-projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_backup/")
 projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
 ```
 
@@ -145,3 +145,29 @@ grid::grid.newpage()
 grid::grid.draw(p1$DLX4)
 
 ```
+
+
+# Plotting some motifs
+```{r}
+motifs <- c("BHLHE22")
+
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+
+plotting_motifs <- getFeatures(projNC, select = paste(motifs, collapse="|"), useMatrix = "MotifMatrix")
+
+plotting_motifs_z <- paste0("z:",plotting_motifs)
+
+# Problem with threads > 1...
+motif_plot_nocutoff <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_motifs_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1)
+motif_plot_nocutoff
+```
+

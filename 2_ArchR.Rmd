@@ -24,6 +24,7 @@ library(dplyr)
 library(qdapTools)
 library(plotly)
 library(ggplot2)
+library(parallel)
 addArchRThreads(threads = 62) 
 set.seed(1)
 
@@ -37,14 +38,15 @@ arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db
 
 Now build the Project. (One time only using v1.0.1)
 ```{r}
-all_fragments <- list.files(path = "/data/Austin/10XscATAC/ArchR_data", full.names = T, pattern = "fragments.tsv.gz$")
+setwd("/data/Austin/10XscATAC/ArchR_data_final/")
+
+all_fragments <- list.files(path = "/data/Austin/10XscATAC/ArchR_data_final", full.names = T, pattern = "fragments.tsv.gz$")
 names(all_fragments) <- c("HH10","HH12","HH14","HH16","HH18","HH6","HH8")
 
 # Ensure names are matched with fragments!!!
 all_fragments
 
-# Bug with creating arrow files on ArchR 1.0.2 (something to do with parallel HD5 Writing).
-
+# TODO there appears to be a bug with fragments that extend past the bounds of the custom genome. See https://github.com/GreenleafLab/ArchR/issues/1145
 ArrowFiles <- createArrowFiles(
   inputFiles = all_fragments,
   sampleNames = names(all_fragments),
@@ -55,11 +57,11 @@ ArrowFiles <- createArrowFiles(
   minFrags = 1000,
   nChunk = 5,
   excludeChr = c("MT"),
-  force = T, threads = 32)
+  force = T, threads = 62)
 
 projNC <- ArchRProject(
   ArrowFiles = ArrowFiles, 
-  outputDirectory = "/data/Austin/10XscATAC/ArchR_data",
+  outputDirectory = "/data/Austin/10XscATAC/ArchR_data_final/",
   copyArrows = T,
   geneAnnotation = arch_gg6_genes,
   genomeAnnotation = arch_gg6)
@@ -69,24 +71,27 @@ Let's look at doublet detection and filter these out.
 ```{r}
 # Due to an error with the 1.0.1 version, we will load the information from addDoubletScores run with version 1.0.2.
 
-projNC_1.0.2 <- readRDS(file = "/data/Austin/10XscATAC/ArchR_data_save/Save-ArchR-Project.rds")
+# projNC_1.0.2 <- readRDS(file = "/data/Austin/10XscATAC/ArchR_data_save/Save-ArchR-Project.rds")
+# 
+# doublet_results <- data.frame(cellNames = projNC_1.0.2$cellNames,
+#   DoubletScore = projNC_1.0.2$DoubletScore,
+#   DoubletEnrichment = projNC_1.0.2$DoubletEnrichment)
+# 
+# 
+# projNC$DoubletScore <- lookup(terms = projNC$cellNames,
+#                               doublet_results[,1:2])
+# 
+# projNC$DoubletEnrichment <- lookup(terms = projNC$cellNames,
+#                               doublet_results[,1:3])
 
-doublet_results <- data.frame(cellNames = projNC_1.0.2$cellNames,
-  DoubletScore = projNC_1.0.2$DoubletScore,
-  DoubletEnrichment = projNC_1.0.2$DoubletEnrichment)
-
-
-projNC$DoubletScore <- lookup(terms = projNC$cellNames,
-                              doublet_results[,1:2])
-
-projNC$DoubletEnrichment <- lookup(terms = projNC$cellNames,
-                              doublet_results[,1:3])
-
-# projNC <- addDoubletScores(
-#   projNC,
-#   useMatrix = "TileMatrix",
-#   k = 10,
-#   nTrials = 10, force = T, threads = 62)
+# Let's try doublet detection with release 1.0.3
+projNC <- addDoubletScores(
+  projNC,
+  useMatrix = "TileMatrix",
+  k = 10,
+  nTrials = 10,
+  force = T,
+  threads = 62)
 
 projNC <- addIterativeLSI(
   projNC, useMatrix = "TileMatrix",
@@ -127,7 +132,7 @@ summary(width(combined.peaks))
 
 projNC <- addPeakSet(projNC, peakSet = combined.peaks, force = T)
 
-projNC <- addPeakMatrix(projNC, binarize = T, threads = 8, force = T)
+projNC <- addPeakMatrix(projNC, binarize = T, threads = 32, force = T)
 
 projNC$batch <- ifelse(projNC$Sample %in% c("HH8","HH10","HH14","HH16"),
                        "batch1",
@@ -337,8 +342,11 @@ Cluster_Motifs <- getMarkerFeatures(
     testMethod = "wilcoxon",
     useSeqnames = "z")
 
-Motif_list <- getMarkers(Cluster_Motifs, cutOff = "FDR <= 0.01 & Log2FC >= 1.25")
+Motif_list <- getMarkers(Cluster_Motifs, cutOff = "FDR <= 0.01")
 Motif_df <- as.data.frame(Motif_list)
+
+Motif_df$TF <- stringr::str_split(Motif_df$name, pattern = "_", simplify = T)[,1]
+write_csv(Motif_df, file = "Figure_Exports/TF_Markers.csv")
 
 top_Motifs <- Motif_df %>% dplyr::group_by(group_name) %>% dplyr::top_n(3, wt = Log2FC)
 ```
@@ -505,24 +513,24 @@ saveArchRProject(ArchRProj = projNC, outputDirectory = "/data/Austin/10XscATAC/A
 
 ## Differential Markers
 ```{r}
+# Marker Peaks
 Peak_Markers <- getMarkerFeatures(projNC, groupBy = "Clusters", useMatrix = "PeakMatrix")
 Peak_Markers.df <- getMarkers(Peak_Markers, cutOff = "FDR <= 0.05 & Log2FC >= 0.5")
 Peak_Markers.df <- as(unlist(Peak_Markers.df), "data.frame")
 Peak_Markers.df$Cluster <- stringr::str_split(rownames(Peak_Markers.df), pattern = fixed("."), simplify = T)[,1]
 write_csv(Peak_Markers.df, file = "Figure_Exports/Peak_Markers.csv")
 
-# Export each cluster as a bed file
+# Export each cluster's enriched peaks as a bed file
 for (cl in unique(Peak_Markers.df$Cluster)){
   bed <- Peak_Markers.df[Peak_Markers.df$Cluster == cl,c("seqnames","start","end")]
   export.bed(bed, con = paste0("Figure_Exports/Peak_Marker_Beds/",cl,".bed"))
 }
 
+# Marker Gene Scores
 Gene_Markers <- getMarkerFeatures(projNC, groupBy = "Clusters", useMatrix = "GeneScoreMatrix")
 Gene_Markers.df <- getMarkers(Gene_Markers, cutOff = "FDR <= 0.05 & Log2FC >= 0.5")
 Gene_Markers.df <- as(unlist(Gene_Markers.df), "data.frame")
 Gene_Markers.df$Cluster <- stringr::str_split(rownames(Gene_Markers.df), pattern = fixed("."), simplify = T)[,1]
 write_csv(Gene_Markers.df, file = "Figure_Exports/Gene_Markers.csv")
-
-
 ```
 

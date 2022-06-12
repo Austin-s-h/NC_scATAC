@@ -66,15 +66,15 @@
     },
     "ArchR": {
       "Package": "ArchR",
-      "Version": "1.0.1",
+      "Version": "1.0.2",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "ArchR",
       "RemoteUsername": "GreenleafLab",
-      "RemoteRef": "master",
-      "RemoteSha": "041882c7d123ab6288aa37fa33fa6add54ca833e",
-      "Hash": "6f00b371b6add269927a0b7bf76310b7",
+      "RemoteRef": "release_1.0.2",
+      "RemoteSha": "d214b0b1c23af8192d1818b6878da1b28ba346cf",
+      "Hash": "50cd9ef7254e3b7dbac63d8be87e17f2",
       "Requirements": [
         "BiocGenerics",
         "Biostrings",
@@ -611,10 +611,10 @@
     },
     "RCurl": {
       "Package": "RCurl",
-      "Version": "1.98-1.6",
+      "Version": "1.98-1.7",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "53a4a5e55370f1a1a4afd92356252946",
+      "Hash": "b70bf7bef94b2a3fa09795b0594f3695",
       "Requirements": [
         "bitops"
       ]
@@ -1345,20 +1345,21 @@
     },
     "dbplyr": {
       "Package": "dbplyr",
-      "Version": "2.1.1",
+      "Version": "2.2.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "1f37fa4ab2f5f7eded42f78b9a887182",
+      "Hash": "a6e4cc7b658d043806bc559ef42a1d2a",
       "Requirements": [
         "DBI",
         "R6",
         "assertthat",
         "blob",
+        "cli",
         "dplyr",
-        "ellipsis",
         "glue",
         "lifecycle",
         "magrittr",
+        "pillar",
         "purrr",
         "rlang",
         "tibble",
@@ -2187,10 +2188,10 @@
     },
     "parallelly": {
       "Package": "parallelly",
-      "Version": "1.31.1",
+      "Version": "1.32.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "115faaa1a50897c3e2339d1cb7d3d493",
+      "Hash": "022489ebce2ef2438db4583fae118240",
       "Requirements": []
     },
     "patchwork": {
@@ -2538,10 +2539,10 @@
     },
     "restfulr": {
       "Package": "restfulr",
-      "Version": "0.0.13",
+      "Version": "0.0.14",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "48d7ce4ee04cef63ae75d87bbb94b1f7",
+      "Hash": "d7b5a78ac87228789202e511608f9c86",
       "Requirements": [
         "RCurl",
         "S4Vectors",
@@ -2874,10 +2875,10 @@
     },
     "sp": {
       "Package": "sp",
-      "Version": "1.4-7",
+      "Version": "1.5-0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "c5dad1d43440f0c426a6d29b30b333fa",
+      "Hash": "2a118bdd2db0a301711e0a9e3e3206d5",
       "Requirements": [
         "lattice"
       ]

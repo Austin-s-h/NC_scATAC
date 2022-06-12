@@ -262,7 +262,7 @@ p8
 ## E
 Extra motif plots of markers
 ```{r}
-motifs <- c("YY2","SIX3","TFAP2A","PAX6","FOXD3","NR2F2","RFX3")
+motifs <- c("YY2","SIX3","TFAP2A","PAX6","FOXD3","NR2F2","RFX3", "ZIC1")
 
 grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"
@@ -280,20 +280,105 @@ motif_plot_supp <- plotEmbedding(projNC,
                                      sampleCells = NULL,
                                      rastr = F,
                                      keepAxis = F,
-                                     threads = 1)
+                                     threads = 1,
+                                    randomize = F)
 
 for (plot in seq(length(motif_plot_supp))){
   plotPDF(motif_plot_supp[[plot]], name = paste0("Plot-Motif-Zscores-Supp-",plot),
           addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
 }
-combined2 <- cowplot::plot_grid(motif_plot_supp[[9]],motif_plot_supp[[3]],
-                                motif_plot_supp[[8]],motif_plot_supp[[2]],
-                                motif_plot_supp[[1]],motif_plot_supp[[6]],
-                                motif_plot_supp[[7]], nrow = 2)
 
-plotPDF(combined2, name = "Plot-Motif-Zscores-supp.pdf", ArchRProj = projNC, addDOC = FALSE, width = 16, height = 16)
+# Digging into neuronal clusters.
 
-combined2
+# Class B dILA Neurons
+# LHX1/5 PAX2 DRGX LBX2 GBX1 EN1
+neuron_motifs <- c("LBX2","TLX2","LHX5","GBX1")
+
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+
+plotting_neuron_motifs <- getFeatures(projNC, select = paste(neuron_motifs, collapse="|"), useMatrix = "MotifMatrix")
+
+plotting_neuron_motifs_z <- paste0("z:",plotting_neuron_motifs)
+
+# Problem with threads > 1...
+motif_plot_neurons <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_neuron_motifs_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1,
+                                     randomize = F)
+motif_plot_neurons
+
+for (plot in seq(length(motif_plot_neurons))){
+  plotPDF(motif_plot_neurons[[plot]], name = paste0("Plot-Motif-Zscores-C6-",plot),
+          addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
+}
+
+# tbd neural 1
+# dopaminergic neurons of substantia nigra?
+# OTX2 RFX4 DMBX1 PITX3 RHOXF1
+
+neuron_motifs_2 <- c("DMBX1","RHOXF1","PITX3","Arid3a")
+
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+
+plotting_neuron_motifs_2 <- getFeatures(projNC, select = paste(neuron_motifs_2, collapse="|"), useMatrix = "MotifMatrix")
+
+plotting_neuron_motifs_2_z <- paste0("z:",plotting_neuron_motifs_2)
+
+motif_plot_neurons_2 <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_neuron_motifs_2_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1,
+                                     randomize = F)
+motif_plot_neurons_2
+
+for (plot in seq(length(motif_plot_neurons_2))){
+  plotPDF(motif_plot_neurons_2[[plot]], name = paste0("Plot-Motif-Zscores-C7-",plot),
+          addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
+}
+
+# neural 2
+# RFX4 PBX1 MEIS2 SOX10
+# Check KROX20 genescore for these guys?
+
+neuron_motifs_3 <- c("RFX4","PBX1","PAX3","SOX10")
+
+grey_red <- ArchRPalettes$whiteRed
+grey_red[1] <- "grey"
+
+plotting_neuron_motifs_3 <- getFeatures(projNC, select = paste(neuron_motifs_3, collapse="|"), useMatrix = "MotifMatrix")
+
+plotting_neuron_motifs_3_z <- paste0("z:",plotting_neuron_motifs_3)
+
+motif_plot_neurons_3 <- plotEmbedding(projNC,
+                                     embedding = "UMAP",
+                                     colorBy = "MotifMatrix",
+                                     name = plotting_neuron_motifs_3_z,
+                                     plotAs = "points",
+                                     sampleCells = NULL,
+                                     rastr = F,
+                                     keepAxis = F,
+                                     threads = 1,
+                                     randomize = F)
+motif_plot_neurons_3
+
+for (plot in seq(length(motif_plot_neurons_3))){
+  plotPDF(motif_plot_neurons_3[[plot]], name = paste0("Plot-Motif-Zscores-C5-",plot),
+          addDOC = FALSE, ArchRProj = projNC, width = 5, height = 5)
+}
+
 ```
 ## F
 A heatmap of the top changing motifs
@@ -327,7 +412,9 @@ label_motifs <- c("TWIST1_741", "OTX2_718","SNAI2_729",
                   "YY2_744","SIX1_405","TFAP2A_739","PAX6_14","NR2F2_399",
                   "RFX3_725","SP4_177","FOXD2_604","Atoh1_306","NEUROG2_162",
                   "SCRT1_727","Rarg_344","PITX2_526","SOX9_20","PHOX2B_720","ETV4_682",
-                  "KLF2_496","ELK1_357")
+                  "KLF2_496","ELK1_357","ZIC1_190","PAX3.var.2_525","PBX1_15",
+                  "SOX10_407","TLX2_555","LHX5_500","LBX2_193","GBX1_372",
+                  "PITX3_205","Arid3a_43","RHOXF1_210","MITF_707")
 
 label_index <- which(rownames(temp_f) %in% label_motifs)
 label_text <- toupper(stringr::str_split(rownames(temp_f)[label_index], pattern = "_", simplify = T)[,1])
@@ -353,6 +440,51 @@ p9 <- plotTrajectory(projNC, trajectory = "hour_adj_pseudotime",
 plotPDF(p9[[1]], name = "Plot-UMAP-Pseudotime.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9[[1]]
+
+# Pseudotime with just certain cells highlighted
+# Mesenchyme
+
+p9b <- plotTrajectory(projNC, trajectory = "C10END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9b[[1]], name = "Plot-UMAP-Pseudotime-mesenchyme.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9b[[1]]
+
+p9c <- plotTrajectory(projNC, trajectory = "C5END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9c[[1]], name = "Plot-UMAP-Pseudotime-Neural2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9c[[1]]
+
+p9d <- plotTrajectory(projNC, trajectory = "C2END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9d[[1]], name = "Plot-UMAP-Pseudotime-SensoryGlia.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9d[[1]]
+
+p9e <- plotTrajectory(projNC, trajectory = "C9END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9e[[1]], name = "Plot-UMAP-Pseudotime-SensoryNeurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9e[[1]]
+
+p9f <- plotTrajectory(projNC, trajectory = "C1END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9f[[1]], name = "Plot-UMAP-Pseudotime-Melanocytes.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9f[[1]]
+
+p9g <- plotTrajectory(projNC, trajectory = "C7END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9g[[1]], name = "Plot-UMAP-Pseudotime-Neural1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9g[[1]]
 ```
 
 ## B
@@ -818,8 +950,7 @@ heatmap7
 
 ## C
 Individual line plots of just top Motifs for Mesenchyme branch
-```{r}
-
+```{r Line plots for Mesenchyme over pseudotime}
 interesting_mesenchyme_factors <- c("ETS1","RXRG","NR2F_Family","TWIST1",
             "ZBTB18","TFAP2_Family","JUNB",
             "FOSL1..JUN","FLI1","SOXE_Family")
@@ -1001,6 +1132,9 @@ Genescores
 
 ## A
 Investigation of Genescores.
+
+TODO - Genescores using this new algorithm seems worse than previous implemention from Cicero. Perhaps I should compare Cicero vs ArchR Coaccessibility
+1.  It seems that ArchR gives 'cleaner' CoAccessibility.
 ```{r}
 # Genescores on non-imputed data.
 markersGS <- getMarkerFeatures(
@@ -1011,13 +1145,11 @@ markersGS <- getMarkerFeatures(
     normBy = "ReadsInPeaks",
     testMethod = "wilcoxon")
 
-# Heatmap of all differentially enriched genes.
+# Heatmap of all differential enriched genes.
 plotMarkerHeatmap(seMarker = markersGS,
                   cutOff = "FDR <= 0.01 & Log2FC >= 0.75")
 
 ```
-
-
 
 ## B
 DiffTF-like correlation of TF expression to accessibility of peaks that contain their motif.
@@ -1025,7 +1157,7 @@ DiffTF-like correlation of TF expression to accessibility of peaks that contain 
 We can use this to identify transcription factors of interest in each lineage.
 Interested in FOXD3 'biomodal' activity.
 
-```{r}
+```{r Across the entire dataset}
 seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
 seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
 
@@ -1066,12 +1198,141 @@ p13 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, lab
     limits = c(0, max(corGSM_MM$maxDelta)*1.05)
   ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
 
-plotPDF(p13, name = "Plot-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+plotPDF(p13, name = "Plot-DiffTFlike-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
 
 p13
 ```
 
+```{r Mesencyhme vs Sensory Neurons}
+# Mesenchyme
+projNC_mes <- projNC[projNC$Cell_Identity %in% 
+                       c("C4_Multipotent_NC","C8_Early_Mesenchyme",
+                         "C3_Int_Mesenchyme","C10_Late_Mesenchyme"),]
+  
 
-```{r}
+seGroupMotif_mes <- getGroupSE(ArchRProj = projNC_mes, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ_mes <- seGroupMotif_mes[rowData(seGroupMotif_mes)$seqnames=="z",]
+
+rowData(seZ_mes)$maxDelta <- lapply(seq_len(ncol(seZ_mes)), function(x){
+  rowMaxs(assay(seZ_mes) - assay(seZ_mes)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM_mes <- correlateMatrices(
+    ArchRProj = projNC_mes,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM_mes$maxDelta <- rowData(seZ_mes)[match(corGSM_MM_mes$MotifMatrix_name, rowData(seZ_mes)$name), "maxDelta"]
+
+corGSM_MM_mes <- corGSM_MM_mes[order(abs(corGSM_MM_mes$cor), decreasing = TRUE), ]
+corGSM_MM_mes <- corGSM_MM_mes[which(!duplicated(gsub("\\-.*","",corGSM_MM_mes[,"MotifMatrix_name"]))), ]
+corGSM_MM_mes$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor > 0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor < -0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM_mes[corGSM_MM_mes$TFRegulator=="Positive",1])
+
+corGSM_MM_mes$label <- ifelse(corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), corGSM_MM_mes$GeneScoreMatrix_name, "")
+
+p14 <- ggplot(data.frame(corGSM_MM_mes), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM_mes$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p14, name = "Plot-Mesencyme-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p14
+
+projNC_senseNeuron <- projNC[projNC$Cell_Identity %in% 
+                       c("C4_Multipotent_NC","C9_Sensory_Neurons"),]
+  
+
+seGroupMotif_senseNeuron <- getGroupSE(ArchRProj = projNC_senseNeuron, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ_senseNeuron <- seGroupMotif_senseNeuron[rowData(seGroupMotif_senseNeuron)$seqnames=="z",]
+
+rowData(seZ_senseNeuron)$maxDelta <- lapply(seq_len(ncol(seZ_senseNeuron)), function(x){
+  rowMaxs(assay(seZ_senseNeuron) - assay(seZ_senseNeuron)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM_senseNeuron <- correlateMatrices(
+    ArchRProj = projNC_senseNeuron,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM_senseNeuron$maxDelta <- rowData(seZ_senseNeuron)[match(corGSM_MM_senseNeuron$MotifMatrix_name, rowData(seZ_senseNeuron)$name), "maxDelta"]
+
+corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[order(abs(corGSM_MM_senseNeuron$cor), decreasing = TRUE), ]
+corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[which(!duplicated(gsub("\\-.*","",corGSM_MM_senseNeuron[,"MotifMatrix_name"]))), ]
+corGSM_MM_senseNeuron$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor > 0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor < -0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator=="Positive",1])
+
+corGSM_MM_senseNeuron$label <- ifelse(corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), corGSM_MM_senseNeuron$GeneScoreMatrix_name, "")
+
+p15 <- ggplot(data.frame(corGSM_MM_senseNeuron), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM_senseNeuron$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p15, name = "Plot-SensoryNeuron-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p15
+
+# What are the largest differences between shared transcription factors?
+# First, see how many are classified differently.
+
+mes_summary <- as.data.frame(corGSM_MM_mes[corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
+
+sn_summary <- as.data.frame(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
+
+correlation_comparison <- merge(mes_summary, sn_summary, by = "label", all.x = TRUE, all.y = TRUE)
+```
+
+## In-vivo enhancer images
+```{r plot peak accessibility}
+# 2−42661574−42662731
+# 27−5656060−5657658
+# 1−173791046−173792605
+prev_locations <- makeGRangesFromDataFrame(data.frame(chr = c("2","27","1"),
+                                                      start = c("42661574","5656060","173791046"),
+                                                      end = c("42662731","5657658","173792605")))
+
+atac_peaks.gr <- getPeakSet(projNC)
+
+plotting_enhancers.gr <- atac_peaks.gr[atac_peaks.gr %over% prev_locations]
+
+temp <- getMarkerFeatures(projNC, "PeakMatrix")
+
+plotting_enhancers <- c("1-173791114-173792531",
+                        "2-42661783-42662544",
+                        "27-5656219-5656425",
+                        "27-5656717-5657554")
+  
+plotting_motifs <- getFeatures(projNC, select = paste(plotting_enhancers, collapse="|"), useMatrix = "PeakMatrix")
 
 ```
+
