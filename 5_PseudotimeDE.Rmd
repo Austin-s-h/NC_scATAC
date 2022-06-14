@@ -1,0 +1,93 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Let's investigate PseudotimeDE
+
+```{r}
+suppressPackageStartupMessages({
+  library(ArchR)
+  library(knitr)
+  library(TFBSTools)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(ggrepel)
+  library(qdapTools)
+  library(parallel)
+  library(PseudotimeDE)
+  library(SingleCellExperiment)
+  library(slingshot)
+  library(tibble)
+  library(dplyr)
+  library(scales)
+  library(irlba)
+})
+
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesis/")
+projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
+projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
+cluster_to_identity <- data.frame(cluster = paste0("C",1:10),
+                                  identity = c("C1_Melanocytes","C2_Sensory_Glia","C3_Int_Mesenchyme",
+                                               "C4_Multipotent_NC","C5_Hindbrain_Neurons","C6_Somatosensory_Neurons",
+                                               "C7_Midbrain_Neurons","C8_Early_Mesenchyme","C9_Sensory_Neurons",
+                                               "C10_Late_Mesenchyme"))
+projNC$Cell_Identity <- lookup(projNC$Clusters, cluster_to_identity)
+```
+
+```{r}
+projNC_genescore <- getMatrixFromProject(ArchRProj = projNC, useMatrix = "GeneScoreMatrix")
+
+genescore_matrix <- projNC_genescore@assays@data$GeneScoreMatrix
+
+# Negative numbers angry. Scale from 0-100?
+# 
+# maxs <- apply(motifs_matrix, 2, max)
+# mins <- apply(motifs_matrix, 2, min)
+# motifs_matrix <- scale(motifs_matrix, center = mins, scale = maxs - mins)
+# 
+#  
+
+lsi_red <- getReducedDims(projNC, reducedDims = "IterativeLSI")
+umap_red <- getEmbedding(projNC,"UMAP")
+
+genescore_sce <- SingleCellExperiment(
+  genescore_matrix,
+  reducedDims = list(lsi = lsi_red, umap = umap_red),
+  altExps = list(),
+  rowPairs = list(),
+  colPairs = list(),
+  mainExpName = "GeneScore"
+)
+
+colData(genescore_sce) <- projNC@cellColData
+rownames(genescore_sce) <- 
+assayNames(genescore_sce) <- "counts"
+
+libsizes <- colSums(assay(genescore_sce))
+size.factors <- libsizes/mean(libsizes)
+logcounts(genescore_sce) <- log2(t(t(assay(genescore_sce))/size.factors) + 1)
+
+
+
+cells_pseudotime <- data.frame(cells = rownames(genescore_sce@colData),
+                               pseudotime = genescore_sce$hour_adj_pseudotime)
+
+res <- PseudotimeDE::runPseudotimeDE(gene.vec = rownames(genescore_sce)[1:15],
+                                     ori.tbl = cells_pseudotime,
+                                     sub.tbl = NULL,
+                                     mat = genescore_sce,
+                                     model = "qgam",
+                                     assay.use = "logcounts",
+                                     quant = 0.75,
+                                     mc.cores = 62)
+
+PseudotimeDE::plotCurve(gene.vec = res$gene[1:5],
+                                        ori.tbl = cells_pseudotime,
+                                        mat = genescore_sce,
+                                        model.fit = res$gam.fit)
+```
+

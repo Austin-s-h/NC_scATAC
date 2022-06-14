@@ -31,10 +31,11 @@ library(GenomicFeatures)
 library(org.Gg.eg.db)
 library(qdapTools)
 library(stringr)
+library(readr)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
-projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesis/")
 
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
 arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
@@ -93,9 +94,8 @@ cA$Overlap2 <- Peak2_ovl$gene_id
 cA$Overlap_Type <- ifelse(is.na(cA$Overlap1) & is.na(cA$Overlap2), "Distal-Distal",
                           ifelse(!is.na(cA$Overlap1) & !is.na(cA$Overlap2), "Promoter-Promoter", "Distal-Promoter"))
 
-
-
-
+cA$Symbol1 <-  qdapTools::lookup(cA$Overlap1, ensembl2symbol)
+cA$Symbol2 <-  qdapTools::lookup(cA$Overlap2, ensembl2symbol)
 
 CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.5){
   # A function to select identify all of the peaks that are associated with a certain gene given a correlation cutoff.
@@ -112,15 +112,56 @@ CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.5){
   return(sub)
 }
 
-sub_cA <- CorrelatedToGene(cA, goi = "ENSGALG00000012290", cutoff = 0.3)
+sub_cA <- CorrelatedToGene(cA, goi = "ENSGALG00000051297", cutoff = 0.3)
+
+strong_correlations <- cA[cA$correlation >= 0.6,]
+
+write_csv(strong_correlations, file = "./Figure_Exports/Supplemental_Peak2Gene_Correlations.csv")
 ```
 
 So we also want to check out where pseudotime places factors. Order them in time by first significant activation?
 
 ```{r}
 # These might be interesting and very helpful!
-Motif_In_Peaks_Summary <- readRDS("/data/Austin/10XscATAC/ArchR_data_final/Annotations/Motif-In-Peaks-Summary.rds")
+Motif_In_Peaks_Summary <- readRDS("/data/Austin/10XscATAC/ArchR_data_final_backup/Annotations/Motif-In-Peaks-Summary.rds")
 # 
 
+# Focus on mesencyhmal circuit characterization.
+
+# TFAP2B FLI1 RXRG NR2F1 ZBTB18 and TWIST1
+
+projNC_genescore <- getMatrixFromProject(ArchRProj = projNC, useMatrix = "GeneScoreMatrix")
+genescore_matrix <- projNC_genescore@assays@data$GeneScoreMatrix
+
+lsi_red <- getReducedDims(projNC, reducedDims = "IterativeLSI")
+umap_red <- getEmbedding(projNC,"UMAP")
+
+genescore_sce <- SingleCellExperiment(
+  genescore_matrix,
+  reducedDims = list(lsi = lsi_red, umap = umap_red),
+  altExps = list(),
+  rowPairs = list(),
+  colPairs = list(),
+  mainExpName = "GeneScore"
+)
+
+colData(genescore_sce) <- projNC@cellColData
+rownames(genescore_sce) <- 
+assayNames(genescore_sce) <- "counts"
+
+libsizes <- colSums(assay(genescore_sce))
+size.factors <- libsizes/mean(libsizes)
+logcounts(genescore_sce) <- log2(t(t(assay(genescore_sce))/size.factors) + 1)
+
+# Get associated regulatory regions
+addGeneIntegrationMatrix(
+  projNC,
+  useMatrix = "GeneScoreMatrix",
+  seRNA = genescore_sce
+)
+
+addPeak2GeneLinks(projNC, 
+                  )
+plotPeak2GeneHeatmap()
 ```
 

@@ -359,8 +359,9 @@ trajectory1 <- c("C4", "C9") # Sensory neurons
 trajectory2 <- c("C4", "C2") # Sensory Ganglia
 trajectory3 <- c("C4", "C1") # Melanocytes
 trajectory4 <- c("C4", "C3","C8","C10") # Mesenchyme
-trajectory5 <- c("C4", "C3","C5") # Neural 2
-trajectory6 <- c("C4", "C6", "C7") # Neural 1
+trajectory5 <- c("C4", "C3","C5") # Hindbrain Neurons
+trajectory6 <- c("C4", "C7") # Midbrain Neurons
+trajectory7 <- c("C4", "C6") # Somatosensory Neurons
 
 projNC <- addTrajectory(
     ArchRProj = projNC, 
@@ -422,6 +423,16 @@ projNC <- addTrajectory(
     postFilterQuantile = 1,
     force = TRUE)
 
+projNC <- addTrajectory(
+    ArchRProj = projNC, 
+    name = "C6END", 
+    groupBy = "Clusters",
+    trajectory = trajectory7, 
+    embedding = "UMAP", 
+    preFilterQuantile = 1, 
+    postFilterQuantile = 1,
+    force = TRUE)
+
 # Fix an issue with retrieving an embedding with >2 dimensions.
 # plotTrajectoryCustom <- edit(plotTrajectory)
 
@@ -442,7 +453,7 @@ C1_cells <- projNC@cellColData[projNC@cellColData$Clusters == "C1",]
 C10_cells <- projNC@cellColData[projNC@cellColData$Clusters == "C10",]
 C7_cells <- projNC@cellColData[projNC@cellColData$Clusters == "C7",]
 C5_cells <- projNC@cellColData[projNC@cellColData$Clusters == "C5",]
-
+C6_cells <- projNC@cellColData[projNC@cellColData$Clusters == "C6",]
 
 avg_hours <- function(x){
   df <- data.frame(timepoint = x$Sample@values,
@@ -457,6 +468,7 @@ C1_weighted_age <- avg_hours(C1_cells)
 C10_weighted_age <- avg_hours(C10_cells)
 C7_weighted_age <- avg_hours(C7_cells)
 C5_weighted_age <- avg_hours(C5_cells)
+C6_weighted_age <- avg_hours(C6_cells)
 
 C9END_Weighted <- as.numeric(projNC@cellColData[,"C9END"] * C9_weighted_age)
 C2END_Weighted <- as.numeric(projNC@cellColData[,"C2END"] * C2_weighted_age)
@@ -464,7 +476,7 @@ C1END_Weighted <- as.numeric(projNC@cellColData[,"C1END"] * C1_weighted_age)
 C10END_Weighted <- as.numeric(projNC@cellColData[,"C10END"] * C10_weighted_age)
 C7END_Weighted <- as.numeric(projNC@cellColData[,"C7END"] * C7_weighted_age)
 C5END_Weighted <- as.numeric(projNC@cellColData[,"C5END"] * C5_weighted_age)
-
+C6END_Weighted <- as.numeric(projNC@cellColData[,"C6END"] * C6_weighted_age)
 
 # Are there instances of NA despite including every cluster?
 test <- data.frame(
@@ -473,10 +485,11 @@ test <- data.frame(
   C1END_Weighted,
   C10END_Weighted,
   C7END_Weighted,
-  C5END_Weighted
+  C5END_Weighted,
+  C6END_Weighted
 )
 
-summary(is.na(test[,1:6]))
+summary(is.na(test[,1:7]))
 
 test$avg <- Matrix::rowMeans(test, na.rm = T)
 
@@ -508,7 +521,7 @@ cA <- getCoAccessibility(
     resolution = 1,
     returnLoops = FALSE)
 
-saveArchRProject(ArchRProj = projNC, outputDirectory = "/data/Austin/10XscATAC/ArchR_data_final", load = TRUE)
+saveArchRProject(ArchRProj = projNC, outputDirectory = "/data/Austin/10XscATAC/ArchR_data_final_thesis", load = TRUE)
 ```
 
 ## Differential Markers

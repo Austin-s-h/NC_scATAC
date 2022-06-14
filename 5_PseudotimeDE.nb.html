@@ -219,193 +219,29 @@ pre code {
 
 
 <!-- rnb-text-begin -->
-<p>Exploration of building GRN’s using scATAC data.</p>
-<p>So basically, the idea is to combine the positive/negative regulator prediction from motif presence and peak activity over time to build a network of transcription factor regulation. This way, we can assign an average strength and direction to the motif presence within any given peak.</p>
-<p>There are a few ways we wish to filter this. 1. We want to look at highly specific peaks. 2. We want to consider only those highly specific peaks that also are linked to specific genes (via Genescore). These may be too restrictive initially, but we will see!</p>
-<p>So it turns out the Genescore isn’t related to the peak coaccessability at all. It’s based on tile-matrix.</p>
+<div id="lets-investigate-pseudotimede" class="section level1">
+<h1>Let’s investigate PseudotimeDE</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShBcmNoUilcbmBgYCJ9 -->
-<pre class="r"><code>library(ArchR)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2Qgb3ZlcndyaXR0ZW4gYnkgJ2RhdGEudGFibGUnOlxuICBtZXRob2QgICAgICAgICAgIGZyb21cbiAgcHJpbnQuZGF0YS50YWJsZSAgICAgXG5cbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8gfFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8gICAgXFxcbiAgICAgICAgICAgIC4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLyAgICAgIHwuXG4gICAgICAgICAgICBcXFxcXFwgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvICAgICAgICB8LlxuICAgICAgICAgICAgICBcXFxcXFwgICAgICAgICAgICAgICAgICAgICAgICAgIC8gICAgICAgICAgIGB8LlxuICAgICAgICAgICAgICAgIFxcXFxcXCAgICAgICAgICAgICAgICAgICAgICAvICAgICAgICAgICAgICB8LlxuICAgICAgICAgICAgICAgICAgXFwgICAgICAgICAgICAgICAgICAgIC8gICAgICAgICAgICAgICAgfFxcXG4gICAgICAgICAgICAgICAgICBcXFxcIyMjIyNcXCAgICAgICAgICAgLyAgICAgICAgICAgICAgICAgIHx8XG4gICAgICAgICAgICAgICAgPT0jIyMjIyMjIyMjIz4gICAgICAvICAgICAgICAgICAgICAgICAgIHx8XG4gICAgICAgICAgICAgICAgIFxcXFwjIz09Li4uLi4uXFwgICAgLyAgICAgICAgICAgICAgICAgICAgIHx8XG4gICAgICAgICAgICBfX19fX18gPSAgICAgICA9fF9fIC9fXyAgICAgICAgICAgICAgICAgICAgIHx8ICAgICAgXFxcXFxcXG4gICAgICAgICwtLScgLC0tLS1gLSxfXyBfX18vJyAgLS0sLWAtPT09PT09PT09PT09PT09PT09PSMjPT09PT09PT0+XG4gICAgICAgXFwgICAgICAgICAgICAgICAnICAgICAgICAjI19fX19fX18gX19fX18gLC0tLF9fLD0jIyxfXyAgIC8vL1xuICAgICAgICAsICAgIF9fPT0gICAgX19fLC0sX18sLS0nIycgID09PScgICAgICBgLScgICAgfCAjIywtL1xuICAgICAgICAtLF9fX18sLS0tJyAgICAgICBcXFxcIyMjI1xcXFxfX19fX19fX19fX19fX19fLC0tXFxcXF8jIywvXG4gICAgICAgICAgIF9fXyAgICAgIC5fX19fX18gICAgICAgIF9fX19fXyAgX18gICAgX18gIC5fX19fX18gICAgICBcbiAgICAgICAgICAvICAgXFwgICAgIHwgICBfICBcXCAgICAgIC8gICAgICB8fCAgfCAgfCAgfCB8ICAgXyAgXFwgICAgIFxuICAgICAgICAgLyAgXiAgXFwgICAgfCAgfF8pICB8ICAgIHwgICwtLS0tJ3wgIHxfX3wgIHwgfCAgfF8pICB8ICAgIFxuICAgICAgICAvICAvX1xcICBcXCAgIHwgICAgICAvICAgICB8ICB8ICAgICB8ICAgX18gICB8IHwgICAgICAvICAgICBcbiAgICAgICAvICBfX19fXyAgXFwgIHwgIHxcXCAgXFxcXF9fXyB8ICBgLS0tLS58ICB8ICB8ICB8IHwgIHxcXCAgXFxcXF9fXy5cbiAgICAgIC9fXy8gICAgIFxcX19cXCB8IF98IGAuX19fX198IFxcX19fX19ffHxfX3wgIHxfX3wgfCBffCBgLl9fX19ffFxuICAgIFxuQXJjaFIgOiBWZXJzaW9uIDEuMC4yXG5Gb3IgbW9yZSBpbmZvcm1hdGlvbiBzZWUgb3VyIHdlYnNpdGUgOiB3d3cuQXJjaFJQcm9qZWN0LmNvbVxuSWYgeW91IGVuY291bnRlciBhIGJ1ZyBwbGVhc2UgcmVwb3J0IDogaHR0cHM6Ly9naXRodWIuY29tL0dyZWVubGVhZkxhYi9BcmNoUi9pc3N1ZXNcbkxvYWRpbmcgUmVxdWlyZWQgUGFja2FnZXMuLi5cblx0TG9hZGluZyBQYWNrYWdlIDogZ3JpZCB2NC4xLjBcblx0TG9hZGluZyBQYWNrYWdlIDogZ3JpZEV4dHJhIHYyLjNcblx0TG9hZGluZyBQYWNrYWdlIDogZ3Rvb2xzIHYzLjkuMi4xXG5cdExvYWRpbmcgUGFja2FnZSA6IGd0YWJsZSB2MC4zLjBcblx0TG9hZGluZyBQYWNrYWdlIDogZ2dwbG90MiB2My4zLjZcblx0TG9hZGluZyBQYWNrYWdlIDogbWFncml0dHIgdjIuMC4zXG5cdExvYWRpbmcgUGFja2FnZSA6IHBseXIgdjEuOC43XG5cdExvYWRpbmcgUGFja2FnZSA6IHN0cmluZ3IgdjEuNC4wXG5cdExvYWRpbmcgUGFja2FnZSA6IGRhdGEudGFibGUgdjEuMTQuMlxuXHRMb2FkaW5nIFBhY2thZ2UgOiBtYXRyaXhTdGF0cyB2MC42Mi4wXG5cdExvYWRpbmcgUGFja2FnZSA6IFM0VmVjdG9ycyB2MC4zMi40XG5cdExvYWRpbmcgUGFja2FnZSA6IEdlbm9taWNSYW5nZXMgdjEuNDYuMVxuXHRMb2FkaW5nIFBhY2thZ2UgOiBCaW9jR2VuZXJpY3MgdjAuNDAuMFxuXHRMb2FkaW5nIFBhY2thZ2UgOiBNYXRyaXggdjEuMy40XG5cdExvYWRpbmcgUGFja2FnZSA6IFJjcHAgdjEuMC44LjNcblx0TG9hZGluZyBQYWNrYWdlIDogU3VtbWFyaXplZEV4cGVyaW1lbnQgdjEuMjQuMFxuXHRMb2FkaW5nIFBhY2thZ2UgOiByaGRmNSB2Mi4zOC4xXG5TZXR0aW5nIGRlZmF1bHQgbnVtYmVyIG9mIFBhcmFsbGVsIHRocmVhZHMgdG8gMzIuXG4ifQ== -->
-<pre><code>Registered S3 method overwritten by &#39;data.table&#39;:
-  method           from
-  print.data.table     
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc3VwcHJlc3NQYWNrYWdlU3RhcnR1cE1lc3NhZ2VzKHtcbiAgbGlicmFyeShBcmNoUilcbiAgbGlicmFyeShrbml0cilcbiAgbGlicmFyeShURkJTVG9vbHMpXG4gIGxpYnJhcnkoQ29tcGxleEhlYXRtYXApXG4gIGxpYnJhcnkoZ2dwbG90MilcbiAgbGlicmFyeShnZ3JlcGVsKVxuICBsaWJyYXJ5KHFkYXBUb29scylcbiAgbGlicmFyeShwYXJhbGxlbClcbiAgbGlicmFyeShQc2V1ZG90aW1lREUpXG4gIGxpYnJhcnkoU2luZ2xlQ2VsbEV4cGVyaW1lbnQpXG4gIGxpYnJhcnkoc2xpbmdzaG90KVxuICBsaWJyYXJ5KHRpYmJsZSlcbiAgbGlicmFyeShkcGx5cilcbiAgbGlicmFyeShzY2FsZXMpXG4gIGxpYnJhcnkoaXJsYmEpXG59KVxuXG5cbmFkZEFyY2hSVGhyZWFkcyh0aHJlYWRzID0gNjIpIFxuYGBgIn0= -->
+<pre class="r"><code>suppressPackageStartupMessages({
+  library(ArchR)
+  library(knitr)
+  library(TFBSTools)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(ggrepel)
+  library(qdapTools)
+  library(parallel)
+  library(PseudotimeDE)
+  library(SingleCellExperiment)
+  library(slingshot)
+  library(tibble)
+  library(dplyr)
+  library(scales)
+  library(irlba)
+})
 
-                                                   / |
-                                                 /    \
-            .                                  /      |.
-            \\\                              /        |.
-              \\\                          /           `|.
-                \\\                      /              |.
-                  \                    /                |\
-                  \\#####\           /                  ||
-                ==###########&gt;      /                   ||
-                 \\##==......\    /                     ||
-            ______ =       =|__ /__                     ||      \\\
-        ,--&#39; ,----`-,__ ___/&#39;  --,-`-===================##========&gt;
-       \               &#39;        ##_______ _____ ,--,__,=##,__   ///
-        ,    __==    ___,-,__,--&#39;#&#39;  ===&#39;      `-&#39;    | ##,-/
-        -,____,---&#39;       \\####\\________________,--\\_##,/
-           ___      .______        ______  __    __  .______      
-          /   \     |   _  \      /      ||  |  |  | |   _  \     
-         /  ^  \    |  |_)  |    |  ,----&#39;|  |__|  | |  |_)  |    
-        /  /_\  \   |      /     |  |     |   __   | |      /     
-       /  _____  \  |  |\  \\___ |  `----.|  |  |  | |  |\  \\___.
-      /__/     \__\ | _| `._____| \______||__|  |__| | _| `._____|
-    
-ArchR : Version 1.0.2
-For more information see our website : www.ArchRProject.com
-If you encounter a bug please report : https://github.com/GreenleafLab/ArchR/issues
-Loading Required Packages...
-    Loading Package : grid v4.1.0
-    Loading Package : gridExtra v2.3
-    Loading Package : gtools v3.9.2.1
-    Loading Package : gtable v0.3.0
-    Loading Package : ggplot2 v3.3.6
-    Loading Package : magrittr v2.0.3
-    Loading Package : plyr v1.8.7
-    Loading Package : stringr v1.4.0
-    Loading Package : data.table v1.14.2
-    Loading Package : matrixStats v0.62.0
-    Loading Package : S4Vectors v0.32.4
-    Loading Package : GenomicRanges v1.46.1
-    Loading Package : BiocGenerics v0.40.0
-    Loading Package : Matrix v1.3.4
-    Loading Package : Rcpp v1.0.8.3
-    Loading Package : SummarizedExperiment v1.24.0
-    Loading Package : rhdf5 v2.38.1
-Setting default number of Parallel threads to 32.</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShrbml0cilcbmxpYnJhcnkoVEZCU1Rvb2xzKVxuYGBgIn0= -->
-<pre class="r"><code>library(knitr)
-library(TFBSTools)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiXG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhURkJTVG9vbHPigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpNYXRyaXjigJk6XG5cbiAgICBNYXRyaXhcbiJ9 -->
-<pre><code>
-
-Attaching package: ‘TFBSTools’
-
-The following object is masked from ‘package:Matrix’:
-
-    Matrix</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShDb21wbGV4SGVhdG1hcClcbmBgYCJ9 -->
-<pre class="r"><code>library(ComplexHeatmap)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PVxuQ29tcGxleEhlYXRtYXAgdmVyc2lvbiAyLjEwLjBcbkJpb2NvbmR1Y3RvciBwYWdlOiBodHRwOi8vYmlvY29uZHVjdG9yLm9yZy9wYWNrYWdlcy9Db21wbGV4SGVhdG1hcC9cbkdpdGh1YiBwYWdlOiBodHRwczovL2dpdGh1Yi5jb20vam9rZXJnb28vQ29tcGxleEhlYXRtYXBcbkRvY3VtZW50YXRpb246IGh0dHA6Ly9qb2tlcmdvby5naXRodWIuaW8vQ29tcGxleEhlYXRtYXAtcmVmZXJlbmNlXG5cbklmIHlvdSB1c2UgaXQgaW4gcHVibGlzaGVkIHJlc2VhcmNoLCBwbGVhc2UgY2l0ZTpcbkd1LCBaLiBDb21wbGV4IGhlYXRtYXBzIHJldmVhbCBwYXR0ZXJucyBhbmQgY29ycmVsYXRpb25zIGluIG11bHRpZGltZW5zaW9uYWwgXG4gIGdlbm9taWMgZGF0YS4gQmlvaW5mb3JtYXRpY3MgMjAxNi5cblxuVGhlIG5ldyBJbnRlcmFjdGl2ZUNvbXBsZXhIZWF0bWFwIHBhY2thZ2UgY2FuIGRpcmVjdGx5IGV4cG9ydCBzdGF0aWMgXG5jb21wbGV4IGhlYXRtYXBzIGludG8gYW4gaW50ZXJhY3RpdmUgU2hpbnkgYXBwIHdpdGggemVybyBlZmZvcnQuIEhhdmUgYSB0cnkhXG5cblRoaXMgbWVzc2FnZSBjYW4gYmUgc3VwcHJlc3NlZCBieTpcbiAgc3VwcHJlc3NQYWNrYWdlU3RhcnR1cE1lc3NhZ2VzKGxpYnJhcnkoQ29tcGxleEhlYXRtYXApKVxuPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PVxuIn0= -->
-<pre><code>========================================
-ComplexHeatmap version 2.10.0
-Bioconductor page: http://bioconductor.org/packages/ComplexHeatmap/
-Github page: https://github.com/jokergoo/ComplexHeatmap
-Documentation: http://jokergoo.github.io/ComplexHeatmap-reference
-
-If you use it in published research, please cite:
-Gu, Z. Complex heatmaps reveal patterns and correlations in multidimensional 
-  genomic data. Bioinformatics 2016.
-
-The new InteractiveComplexHeatmap package can directly export static 
-complex heatmaps into an interactive Shiny app with zero effort. Have a try!
-
-This message can be suppressed by:
-  suppressPackageStartupMessages(library(ComplexHeatmap))
-========================================</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShnZ3Bsb3QyKVxubGlicmFyeShnZ3JlcGVsKVxubGlicmFyeShTZXVyYXQpXG5gYGAifQ== -->
-<pre class="r"><code>library(ggplot2)
-library(ggrepel)
-library(Seurat)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2RzIG92ZXJ3cml0dGVuIGJ5ICdodG1sdG9vbHMnOlxuICBtZXRob2QgICAgICAgICAgICAgICBmcm9tICAgICAgICAgXG4gIHByaW50Lmh0bWwgICAgICAgICAgIHRvb2xzOnJzdHVkaW9cbiAgcHJpbnQuc2hpbnkudGFnICAgICAgdG9vbHM6cnN0dWRpb1xuICBwcmludC5zaGlueS50YWcubGlzdCB0b29sczpyc3R1ZGlvXG5SZWdpc3RlcmVkIFMzIG1ldGhvZCBvdmVyd3JpdHRlbiBieSAnaHRtbHdpZGdldHMnOlxuICBtZXRob2QgICAgICAgICAgIGZyb20gICAgICAgICBcbiAgcHJpbnQuaHRtbHdpZGdldCB0b29sczpyc3R1ZGlvXG5BdHRhY2hpbmcgU2V1cmF0T2JqZWN0XG5BdHRhY2hpbmcgc3BcblxuQXR0YWNoaW5nIHBhY2thZ2U6IOKAmFNldXJhdOKAmVxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOlN1bW1hcml6ZWRFeHBlcmltZW504oCZOlxuXG4gICAgQXNzYXlzXG4ifQ== -->
-<pre><code>Registered S3 methods overwritten by &#39;htmltools&#39;:
-  method               from         
-  print.html           tools:rstudio
-  print.shiny.tag      tools:rstudio
-  print.shiny.tag.list tools:rstudio
-Registered S3 method overwritten by &#39;htmlwidgets&#39;:
-  method           from         
-  print.htmlwidget tools:rstudio
-Attaching SeuratObject
-Attaching sp
-
-Attaching package: ‘Seurat’
-
-The following object is masked from ‘package:SummarizedExperiment’:
-
-    Assays</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShTaWduYWMpXG5saWJyYXJ5KEJTZ2Vub21lLkdnYWxsdXMuRU5TRU1CTC5nYWxHYWw2KVxuYGBgIn0= -->
-<pre class="r"><code>library(Signac)
-library(BSgenome.Ggallus.ENSEMBL.galGal6)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBCU2dlbm9tZVxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBCaW9zdHJpbmdzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IFhWZWN0b3JcblxuQXR0YWNoaW5nIHBhY2thZ2U6IOKAmFhWZWN0b3LigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpwbHly4oCZOlxuXG4gICAgY29tcGFjdFxuXG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhCaW9zdHJpbmdz4oCZXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0IGlzIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6Z3JpZOKAmTpcblxuICAgIHBhdHRlcm5cblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpiYXNl4oCZOlxuXG4gICAgc3Ryc3BsaXRcblxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBydHJhY2tsYXllclxuIn0= -->
-<pre><code>Loading required package: BSgenome
-Loading required package: Biostrings
-Loading required package: XVector
-
-Attaching package: ‘XVector’
-
-The following object is masked from ‘package:plyr’:
-
-    compact
-
-
-Attaching package: ‘Biostrings’
-
-The following object is masked from ‘package:grid’:
-
-    pattern
-
-The following object is masked from ‘package:base’:
-
-    strsplit
-
-Loading required package: rtracklayer</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShHZW5vbWljRmVhdHVyZXMpXG5gYGAifQ== -->
-<pre class="r"><code>library(GenomicFeatures)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBBbm5vdGF0aW9uRGJpXG5SZWdpc3RlcmVkIFMzIG1ldGhvZHMgb3ZlcndyaXR0ZW4gYnkgJ2RicGx5cic6XG4gIG1ldGhvZCAgICAgICAgIGZyb21cbiAgcHJpbnQudGJsX2xhenkgICAgIFxuICBwcmludC50Ymxfc3FsICAgICAgXG4ifQ== -->
-<pre><code>Loading required package: AnnotationDbi
-Registered S3 methods overwritten by &#39;dbplyr&#39;:
-  method         from
-  print.tbl_lazy     
-  print.tbl_sql      </code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShvcmcuR2cuZWcuZGIpXG5gYGAifQ== -->
-<pre class="r"><code>library(org.Gg.eg.db)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShxZGFwVG9vbHMpXG5gYGAifQ== -->
-<pre class="r"><code>library(qdapTools)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYcWRhcFRvb2xz4oCZXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0IGlzIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6U3VtbWFyaXplZEV4cGVyaW1lbnTigJk6XG5cbiAgICBzaGlmdFxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOkdlbm9taWNSYW5nZXPigJk6XG5cbiAgICBzaGlmdFxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOklSYW5nZXPigJk6XG5cbiAgICBzaGlmdFxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmRhdGEudGFibGXigJk6XG5cbiAgICBzaGlmdFxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnBseXLigJk6XG5cbiAgICBpZFxuIn0= -->
-<pre><code>
-Attaching package: ‘qdapTools’
-
-The following object is masked from ‘package:SummarizedExperiment’:
-
-    shift
-
-The following object is masked from ‘package:GenomicRanges’:
-
-    shift
-
-The following object is masked from ‘package:IRanges’:
-
-    shift
-
-The following object is masked from ‘package:data.table’:
-
-    shift
-
-The following object is masked from ‘package:plyr’:
-
-    id</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShzdHJpbmdyKVxubGlicmFyeShyZWFkcilcblxuYWRkQXJjaFJUaHJlYWRzKHRocmVhZHMgPSA2MikgXG5gYGAifQ== -->
-<pre class="r"><code>library(stringr)
-library(readr)
 
 addArchRThreads(threads = 62) </code></pre>
 <!-- rnb-source-end -->
@@ -442,185 +278,61 @@ projNC &lt;- loadArchRProject(path = &quot;/data/Austin/10XscATAC/ArchR_data_fin
       /__/     \__\ | _| `._____| \______||__|  |__| | _| `._____|
     </code></pre>
 <!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuVHhEYl9nYWxHYWw2IDwtIG1ha2VUeERiRnJvbUVuc2VtYmwob3JnYW5pc20gPSBcIkdhbGx1cyBnYWxsdXNcIiwgcmVsZWFzZSA9IDEwMylcbmBgYCJ9 -->
-<pre class="r"><code>TxDb_galGal6 &lt;- makeTxDbFromEnsembl(organism = &quot;Gallus gallus&quot;, release = 103)</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucHJvak5DQHByb2plY3RNZXRhZGF0YSRvdXRwdXREaXJlY3RvcnkgPC0gXCIuL0ZpZ3VyZV9FeHBvcnRzXCJcbnByb2pOQyA8LSBhZGRJbXB1dGVXZWlnaHRzKHByb2pOQywgc2FtcGxlQ2VsbHMgPSAxMDAwMCwgblJlcCA9IDMsIGsgPSAyMClcbmBgYCJ9 -->
+<pre class="r"><code>projNC@projectMetadata$outputDirectory &lt;- &quot;./Figure_Exports&quot;
+projNC &lt;- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiRmV0Y2ggdHJhbnNjcmlwdHMgYW5kIGdlbmVzIGZyb20gRW5zZW1ibCAuLi4gT0tcbiAgKGZldGNoZWQgMzkyODggdHJhbnNjcmlwdHMgZnJvbSAyNDM1NiBnZW5lcylcbkZldGNoIGV4b25zIGFuZCBDRFMgZnJvbSBFbnNlbWJsIC4uLiBPS1xuRmV0Y2ggY2hyb21vc29tZSBuYW1lcyBhbmQgbGVuZ3RocyBmcm9tIEVuc2VtYmwgLi4uT0tcbkdhdGhlciB0aGUgbWV0YWRhdGEgLi4uIE9LXG5NYWtlIHRoZSBUeERiIG9iamVjdCAuLi4gT0tcbiJ9 -->
-<pre><code>Fetch transcripts and genes from Ensembl ... OK
-  (fetched 39288 transcripts from 24356 genes)
-Fetch exons and CDS from Ensembl ... OK
-Fetch chromosome names and lengths from Ensembl ...OK
-Gather the metadata ... OK
-Make the TxDb object ... OK</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiQXJjaFIgbG9nZ2luZyB0byA6IEFyY2hSTG9ncy9BcmNoUi1hZGRJbXB1dGVXZWlnaHRzLTZhYWY1YTQxNDYxMy1EYXRlLTIwMjItMDYtMTNfVGltZS0yMC01Mi01Mi5sb2dcbklmIHRoZXJlIGlzIGFuIGlzc3VlLCBwbGVhc2UgcmVwb3J0IHRvIGdpdGh1YiB3aXRoIGxvZ0ZpbGUhXG4yMDIyLTA2LTEzIDIwOjUyOjUzIDogQ29tcHV0aW5nIEltcHV0ZSBXZWlnaHRzIFVzaW5nIE1hZ2ljIChDZWxsIDIwMTgpLCAwIG1pbnMgZWxhcHNlZC5cbiJ9 -->
+<pre><code>ArchR logging to : ArchRLogs/ArchR-addImputeWeights-6aaf5a414613-Date-2022-06-13_Time-20-52-52.log
+If there is an issue, please report to github with logFile!
+2022-06-13 20:52:53 : Computing Impute Weights Using Magic (Cell 2018), 0 mins elapsed.</code></pre>
 <!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYXJjaF9nZzZfZ2VuZXMgPC0gY3JlYXRlR2VuZUFubm90YXRpb24oVHhEYiA9IFR4RGJfZ2FsR2FsNiwgT3JnRGIgPSBvcmcuR2cuZWcuZGIsIGFubm9TdHlsZSA9IFwiRU5TRU1CTFwiKVxuYGBgIn0= -->
-<pre class="r"><code>arch_gg6_genes &lt;- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = &quot;ENSEMBL&quot;)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiR2V0dGluZyBHZW5lcy4uXG5EZXRlcm1pbmVkIEFubm90YXRpb24gU3R5bGUgPSBFTlNFTUJMXG5HZXR0aW5nIEV4b25zLi5cbkdldHRpbmcgVFNTLi5cbiJ9 -->
-<pre><code>Getting Genes..
-Determined Annotation Style = ENSEMBL
-Getting Exons..
-Getting TSS..</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZW5zZW1ibDJzeW1ib2wgPC0gYXMuZGF0YS5mcmFtZShtY29scyhhcmNoX2dnNl9nZW5lcyRnZW5lcykpXG5gYGAifQ== -->
-<pre class="r"><code>ensembl2symbol &lt;- as.data.frame(mcols(arch_gg6_genes$genes))</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY2x1c3Rlcl90b19pZGVudGl0eSA8LSBkYXRhLmZyYW1lKGNsdXN0ZXIgPSBwYXN0ZTAoXCJDXCIsMToxMCksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaWRlbnRpdHkgPSBjKFwiQzFfTWVsYW5vY3l0ZXNcIixcIkMyX1NlbnNvcnlfR2xpYVwiLFwiQzNfSW50X01lc2VuY2h5bWVcIixcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXCJDNF9NdWx0aXBvdGVudF9OQ1wiLFwiQzVfSGluZGJyYWluX05ldXJvbnNcIixcIkM2X1NvbWF0b3NlbnNvcnlfTmV1cm9uc1wiLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBcIkM3X01pZGJyYWluX05ldXJvbnNcIixcIkM4X0Vhcmx5X01lc2VuY2h5bWVcIixcIkM5X1NlbnNvcnlfTmV1cm9uc1wiLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBcIkMxMF9MYXRlX01lc2VuY2h5bWVcIikpXG5wcm9qTkMkQ2VsbF9JZGVudGl0eSA8LSBsb29rdXAocHJvak5DJENsdXN0ZXJzLCBjbHVzdGVyX3RvX2lkZW50aXR5KVxuYGBgIn0= -->
+<pre class="r"><code>cluster_to_identity &lt;- data.frame(cluster = paste0(&quot;C&quot;,1:10),
+                                  identity = c(&quot;C1_Melanocytes&quot;,&quot;C2_Sensory_Glia&quot;,&quot;C3_Int_Mesenchyme&quot;,
+                                               &quot;C4_Multipotent_NC&quot;,&quot;C5_Hindbrain_Neurons&quot;,&quot;C6_Somatosensory_Neurons&quot;,
+                                               &quot;C7_Midbrain_Neurons&quot;,&quot;C8_Early_Mesenchyme&quot;,&quot;C9_Sensory_Neurons&quot;,
+                                               &quot;C10_Late_Mesenchyme&quot;))
+projNC$Cell_Identity &lt;- lookup(projNC$Clusters, cluster_to_identity)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
-<p>Let’s explore the CoAccessibility object. Specifically, we are looking for a way to link peaks to genes. I think the easiest way is just to check if either of the peaks overlap the gene’s promoter region (-5kb to +1kb).</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucGVha3NldCA8LSBnZXRQZWFrU2V0KHByb2pOQylcbkFsbF9QZWFrX1JlZ2lvbnMgPC0gYXMuZGF0YS5mcmFtZShwZWFrc2V0KVxuQWxsX1BlYWtfUmVnaW9ucyRpZHggPC0gYXMuY2hhcmFjdGVyKEFsbF9QZWFrX1JlZ2lvbnMkaWR4KVxuQWxsX1BlYWtfUmVnaW9ucyRQZWFrSUQgPC0gcGFzdGUwKEFsbF9QZWFrX1JlZ2lvbnMkc2VxbmFtZXMsIFwiX1wiLCBBbGxfUGVha19SZWdpb25zJHN0YXJ0LCBcIl9cIiwgQWxsX1BlYWtfUmVnaW9ucyRlbmQpXG5cbiMgR2V0IGNvQWNjZXNzaWJsZSBlbGVtZW50c1xuY0EgPC0gYXMuZGF0YS5mcmFtZShnZXRDb0FjY2Vzc2liaWxpdHkoXG4gICAgQXJjaFJQcm9qID0gcHJvak5DLFxuICAgIGNvckN1dE9mZiA9IDAuMyxcbiAgICByZXNvbHV0aW9uID0gMSxcbiAgICByZXR1cm5Mb29wcyA9IEYpKVxuXG4jIEFubm90YXRlIHdpdGggUGVha0lEXG5iIDwtIEFsbF9QZWFrX1JlZ2lvbnNbLGMoXCJpZHhcIixcIlBlYWtJRFwiKV1cbmIgPC0gYltjQSRxdWVyeUhpdHMsXVxuY0EkUGVhazEgPC0gYiRQZWFrSURcbmMgPC0gQWxsX1BlYWtfUmVnaW9uc1ssYyhcImlkeFwiLFwiUGVha0lEXCIpXVxuYyA8LSBjW2NBJHN1YmplY3RIaXRzLF1cbmNBJFBlYWsyIDwtIGMkUGVha0lEXG5cbiMgTWFrZSBhIEdSYW5nZSBvYmplY3Qgd2l0aCBwcm9tb3RlcnMuXG5nYWxHYWw2X3Byb20gPC0gdHJpbShwcm9tb3RlcnMoZ2VuZXMoVHhEYl9nYWxHYWw2KSwgdXBzdHJlYW0gPSA1MDAwLCBkb3duc3RyZWFtID0gMTAwMCkpXG5gYGAifQ== -->
-<pre class="r"><code>peakset &lt;- getPeakSet(projNC)
-All_Peak_Regions &lt;- as.data.frame(peakset)
-All_Peak_Regions$idx &lt;- as.character(All_Peak_Regions$idx)
-All_Peak_Regions$PeakID &lt;- paste0(All_Peak_Regions$seqnames, &quot;_&quot;, All_Peak_Regions$start, &quot;_&quot;, All_Peak_Regions$end)
-
-# Get coAccessible elements
-cA &lt;- as.data.frame(getCoAccessibility(
-    ArchRProj = projNC,
-    corCutOff = 0.3,
-    resolution = 1,
-    returnLoops = F))
-
-# Annotate with PeakID
-b &lt;- All_Peak_Regions[,c(&quot;idx&quot;,&quot;PeakID&quot;)]
-b &lt;- b[cA$queryHits,]
-cA$Peak1 &lt;- b$PeakID
-c &lt;- All_Peak_Regions[,c(&quot;idx&quot;,&quot;PeakID&quot;)]
-c &lt;- c[cA$subjectHits,]
-cA$Peak2 &lt;- c$PeakID
-
-# Make a GRange object with promoters.
-galGal6_prom &lt;- trim(promoters(genes(TxDb_galGal6), upstream = 5000, downstream = 1000))</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZyBpbiB2YWxpZC5HZW5vbWljUmFuZ2VzLnNlcWluZm8oeCwgc3VnZ2VzdC50cmltID0gVFJVRSkgOlxuICBHUmFuZ2VzIG9iamVjdCBjb250YWlucyAxMjQgb3V0LW9mLWJvdW5kIHJhbmdlcyBsb2NhdGVkIG9uIHNlcXVlbmNlcyAyMCwgQUFETjA1MDAxMzQ4LjEsIEFBRE4wNTAwMTIyMS4xLCAyLCBBQUROMDUwMDEzNjIuMSxcbiAgQUFETjA1MDAxNTEwLjEsIEFBRE4wNTAwMTQxOC4xLCBBQUROMDUwMDEyMjcuMSwgQUFETjA1MDAxNDY1LjEsIEFBRE4wNTAwMTI2My4xLCBBQUROMDUwMDEyNDMuMSwgQUFETjA1MDAxMjg4LjEsIEFBRE4wNTAwMTI0MC4xLFxuICBBQUROMDUwMDE1MDUuMSwgQUFETjA1MDAxMjcyLjEsIEFBRE4wNTAwMTIyMC4xLCBXLCBBQUROMDUwMDEyMzYuMSwgS1o2MjY4MjUuMSwgQUFETjA1MDAxNDA4LjEsIEFBRE4wNTAwMTQ4OC4xLCBLWjYyNjgxOS4xLFxuICBBQUROMDUwMDEzODIuMSwgQUFETjA1MDAxMzMxLjEsIEFBRE4wNTAwMTM3OS4xLCBBQUROMDUwMDEzNTcuMSwgQUFETjA1MDAxMTkwLjEsIEFBRE4wNTAwMTMzNC4xLCBBQUROMDUwMDE0MTcuMSwgQUFETjA1MDAxMjkyLjEsIDExLFxuICBBQUROMDUwMDEyMjIuMSwgS1o2MjY4MjguMSwgQUFETjA1MDAxMjA4LjEsIEFBRE4wNTAwMTM0Ny4xLCBBQUROMDUwMDEzNTMuMSwgMSwgMTUsIEFBRE4wNTAwMTQ4Ni4xLCBBQUROMDUwMDEzMTEuMSwgQUFETjA1MDAxNDA5LjEsXG4gIEFBRE4wNTAwMTIzNS4xLCBBQUROMDUwMDEzNjguMSwgMTgsIEFBRE4wNTAwMTI3My4xLCBLWjYyNjgzOS4xLCBBQUROMDUwMDEyODMuMSwgS1o2MjY4MjcuMSwgNiwgQUFETjA1MDAxMjY4LjEsIEFBRE4wNTAwMTU0My4xLFxuICBBQUROMDUwMDEyNDguMSwgQUFETjA1MDAxMzk2LjEsIEFBRE4wNTAwMTUwOS4xLCBBQUROMDUwMDExODcuMSwgMywgQUFETjA1MDAxNDMzLjEsIEFBRE4wNTAwMTUxMi4xLCAzMywgQUFETjA1MDAxMjMyLjEsIDI1LFxuICBBQUROMDUwMDEzNzguMSwgQUFETjA1MDAxMjg1LjEsIEFBRE4wNTAwMTMzMy4xLCAzMiwgQUFETjA1MDAxMTc2LjEsIEFBRE4wNTAwMTIxMS4xLCBBQUROMDUwMDEyOTAuMSBbLi4uIHRydW5jYXRlZF1cbiJ9 -->
-<pre><code>Warning in valid.GenomicRanges.seqinfo(x, suggest.trim = TRUE) :
-  GRanges object contains 124 out-of-bound ranges located on sequences 20, AADN05001348.1, AADN05001221.1, 2, AADN05001362.1,
-  AADN05001510.1, AADN05001418.1, AADN05001227.1, AADN05001465.1, AADN05001263.1, AADN05001243.1, AADN05001288.1, AADN05001240.1,
-  AADN05001505.1, AADN05001272.1, AADN05001220.1, W, AADN05001236.1, KZ626825.1, AADN05001408.1, AADN05001488.1, KZ626819.1,
-  AADN05001382.1, AADN05001331.1, AADN05001379.1, AADN05001357.1, AADN05001190.1, AADN05001334.1, AADN05001417.1, AADN05001292.1, 11,
-  AADN05001222.1, KZ626828.1, AADN05001208.1, AADN05001347.1, AADN05001353.1, 1, 15, AADN05001486.1, AADN05001311.1, AADN05001409.1,
-  AADN05001235.1, AADN05001368.1, 18, AADN05001273.1, KZ626839.1, AADN05001283.1, KZ626827.1, 6, AADN05001268.1, AADN05001543.1,
-  AADN05001248.1, AADN05001396.1, AADN05001509.1, AADN05001187.1, 3, AADN05001433.1, AADN05001512.1, 33, AADN05001232.1, 25,
-  AADN05001378.1, AADN05001285.1, AADN05001333.1, 32, AADN05001176.1, AADN05001211.1, AADN05001290.1 [... truncated]</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZ2FsR2FsNl9wcm9tJGdlbmVfc3ltYm9sIDwtIGxvb2t1cCh0ZXJtcyA9IGdhbEdhbDZfcHJvbSRnZW5lX2lkLCBrZXkubWF0Y2ggPSBlbnNlbWJsMnN5bWJvbClcblxuIyBXaGljaCBjb0FjY2Vzc2libGUgZWxlbWVudHMgaGF2ZSBhIHBlYWsgaW4gYSBwcm9tb3Rlcj9cblBlYWsxX2Nvb3JkcyA8LSBzdHJfc3BsaXQoY0EkUGVhazEsIHBhdHRlcm4gPSBcIl9cIiwgbiA9IDMsIHNpbXBsaWZ5ID0gVClcblBlYWsxX292bCA8LSBtYWtlR1Jhbmdlc0Zyb21EYXRhRnJhbWUoZGYgPSBkYXRhLmZyYW1lKGNociA9IFBlYWsxX2Nvb3Jkc1ssMV0sXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBzdGFydCA9IFBlYWsxX2Nvb3Jkc1ssMl0sXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBlbmQgPSBQZWFrMV9jb29yZHNbLDNdKSlcbmhpdHMgPC0gZmluZE92ZXJsYXBzKFBlYWsxX292bCwgZ2FsR2FsNl9wcm9tKVxuXG5QZWFrMV9vdmwkZ2VuZV9pZCA8LSBpZmVsc2UoUGVhazFfb3ZsICVpbiUgUGVhazFfb3ZsW2hpdHNAZnJvbV0sIGdhbEdhbDZfcHJvbVtoaXRzQHRvXSRnZW5lX2lkLCBOQSlcblxuXG5QZWFrMl9jb29yZHMgPC0gc3RyX3NwbGl0KGNBJFBlYWsyLCBwYXR0ZXJuID0gXCJfXCIsIG4gPSAzLCBzaW1wbGlmeSA9IFQpXG5QZWFrMl9vdmwgPC0gbWFrZUdSYW5nZXNGcm9tRGF0YUZyYW1lKGRmID0gZGF0YS5mcmFtZShjaHIgPSBQZWFrMl9jb29yZHNbLDFdLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc3RhcnQgPSBQZWFrMl9jb29yZHNbLDJdLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZW5kID0gUGVhazJfY29vcmRzWywzXSkpXG5oaXRzMiA8LSBmaW5kT3ZlcmxhcHMoUGVhazJfb3ZsLCBnYWxHYWw2X3Byb20pXG5cblBlYWsyX292bCRnZW5lX2lkIDwtIGlmZWxzZShQZWFrMl9vdmwgJWluJSBQZWFrMl9vdmxbaGl0c0Bmcm9tXSwgZ2FsR2FsNl9wcm9tW2hpdHNAdG9dJGdlbmVfaWQsIE5BKVxuXG5jQSRPdmVybGFwMSA8LSBQZWFrMV9vdmwkZ2VuZV9pZFxuY0EkT3ZlcmxhcDIgPC0gUGVhazJfb3ZsJGdlbmVfaWRcblxuIyBBbm5vdGF0ZSBhcyBEaXN0YWwtRGlzdGFsLCBEaXN0YWwtUHJvbSwgb3IgUHJvbS1Qcm9tXG5jQSRPdmVybGFwX1R5cGUgPC0gaWZlbHNlKGlzLm5hKGNBJE92ZXJsYXAxKSAmIGlzLm5hKGNBJE92ZXJsYXAyKSwgXCJEaXN0YWwtRGlzdGFsXCIsXG4gICAgICAgICAgICAgICAgICAgICAgICAgIGlmZWxzZSghaXMubmEoY0EkT3ZlcmxhcDEpICYgIWlzLm5hKGNBJE92ZXJsYXAyKSwgXCJQcm9tb3Rlci1Qcm9tb3RlclwiLCBcIkRpc3RhbC1Qcm9tb3RlclwiKSlcblxuY0EkU3ltYm9sMSA8LSAgcWRhcFRvb2xzOjpsb29rdXAoY0EkT3ZlcmxhcDEsIGVuc2VtYmwyc3ltYm9sKVxuY0EkU3ltYm9sMiA8LSAgcWRhcFRvb2xzOjpsb29rdXAoY0EkT3ZlcmxhcDIsIGVuc2VtYmwyc3ltYm9sKVxuXG5cbkNvcnJlbGF0ZWRUb0dlbmUgPC0gZnVuY3Rpb24oY29hY2Nlc3MgPSBjQSwgZ29pID0gXCJcIiwgY3V0b2ZmID0gMC41KXtcbiAgIyBBIGZ1bmN0aW9uIHRvIHNlbGVjdCBpZGVudGlmeSBhbGwgb2YgdGhlIHBlYWtzIHRoYXQgYXJlIGFzc29jaWF0ZWQgd2l0aCBhIGNlcnRhaW4gZ2VuZSBnaXZlbiBhIGNvcnJlbGF0aW9uIGN1dG9mZi5cbiAgIyBJbnB1dHNcbiAgIyBjb2FjY2VzcyAtIEEgZm9ybWF0dGVkIGNvYWNjZXNzYWJpbGl0eSByZXBvcnQgd2l0aCBhdCBsZWFzdCBQZWFrMSwgUGVhazIsIE92ZXJsYXAxLCBPdmVybGFwMiwgYW5kIGNvcnJlbGF0aW9uLlxuICAjIGdvaSAtIEdlbmUgb2YgSW50ZXJlc3QsIGFuIEVOU0VNQkwgSUQgb2YgYSBnZW5lIHlvdSB3aXNoIHRvIGZpbmQgcGVha3MgYXNzb2NpYXRlZCB3aXRoLlxuICAjIGN1dG9mZiAtIGEgbnVtZXJpY2FsIHZhcmlhYmxlIHRvIGZpbHRlciBjb3JybGVhdGlvbiB2YWx1ZXMuXG4gIGNociA8LSBjb2FjY2Vzc1t3aGljaChjb2FjY2VzcyRPdmVybGFwMSA9PSBnb2kpWzFdLFwic2VxbmFtZXNcIl1cbiAgc3ViIDwtIGNvYWNjZXNzW2Mod2hpY2goY29hY2Nlc3MkT3ZlcmxhcDEgPT0gZ29pKSxcbiAgICAgd2hpY2goY29hY2Nlc3MkT3ZlcmxhcDIgPT0gZ29pKSksXVxuICBzdWIgPC0gc3ViW3N1YiRjb3JyZWxhdGlvbiA+PSBjdXRvZmYsXVxuICAjIFJlbW92ZSB0aGluZ3Mgbm90IG9uIHRoZSBzYW1lIGNocm9tb3NvbWUuXG4gIHN1YiA8LSBzdWJbc3ViJHNlcW5hbWVzID09IGNocixdXG4gIHJldHVybihzdWIpXG59XG5cbnN1Yl9jQSA8LSBDb3JyZWxhdGVkVG9HZW5lKGNBLCBnb2kgPSBcIkVOU0dBTEcwMDAwMDA1MTI5N1wiLCBjdXRvZmYgPSAwLjMpXG5cbnN0cm9uZ19jb3JyZWxhdGlvbnMgPC0gY0FbY0EkY29ycmVsYXRpb24gPj0gMC42LF1cblxud3JpdGVfY3N2KHN0cm9uZ19jb3JyZWxhdGlvbnMsIGZpbGUgPSBcIi4vRmlndXJlX0V4cG9ydHMvU3VwcGxlbWVudGFsX1BlYWsyR2VuZV9Db3JyZWxhdGlvbnMuY3N2XCIpXG5gYGAifQ== -->
-<pre class="r"><code>galGal6_prom$gene_symbol &lt;- lookup(terms = galGal6_prom$gene_id, key.match = ensembl2symbol)
-
-# Which coAccessible elements have a peak in a promoter?
-Peak1_coords &lt;- str_split(cA$Peak1, pattern = &quot;_&quot;, n = 3, simplify = T)
-Peak1_ovl &lt;- makeGRangesFromDataFrame(df = data.frame(chr = Peak1_coords[,1],
-                                                      start = Peak1_coords[,2],
-                                                      end = Peak1_coords[,3]))
-hits &lt;- findOverlaps(Peak1_ovl, galGal6_prom)
-
-Peak1_ovl$gene_id &lt;- ifelse(Peak1_ovl %in% Peak1_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
-
-
-Peak2_coords &lt;- str_split(cA$Peak2, pattern = &quot;_&quot;, n = 3, simplify = T)
-Peak2_ovl &lt;- makeGRangesFromDataFrame(df = data.frame(chr = Peak2_coords[,1],
-                                                      start = Peak2_coords[,2],
-                                                      end = Peak2_coords[,3]))
-hits2 &lt;- findOverlaps(Peak2_ovl, galGal6_prom)
-
-Peak2_ovl$gene_id &lt;- ifelse(Peak2_ovl %in% Peak2_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
-
-cA$Overlap1 &lt;- Peak1_ovl$gene_id
-cA$Overlap2 &lt;- Peak2_ovl$gene_id
-
-# Annotate as Distal-Distal, Distal-Prom, or Prom-Prom
-cA$Overlap_Type &lt;- ifelse(is.na(cA$Overlap1) &amp; is.na(cA$Overlap2), &quot;Distal-Distal&quot;,
-                          ifelse(!is.na(cA$Overlap1) &amp; !is.na(cA$Overlap2), &quot;Promoter-Promoter&quot;, &quot;Distal-Promoter&quot;))
-
-cA$Symbol1 &lt;-  qdapTools::lookup(cA$Overlap1, ensembl2symbol)
-cA$Symbol2 &lt;-  qdapTools::lookup(cA$Overlap2, ensembl2symbol)
-
-
-CorrelatedToGene &lt;- function(coaccess = cA, goi = &quot;&quot;, cutoff = 0.5){
-  # A function to select identify all of the peaks that are associated with a certain gene given a correlation cutoff.
-  # Inputs
-  # coaccess - A formatted coaccessability report with at least Peak1, Peak2, Overlap1, Overlap2, and correlation.
-  # goi - Gene of Interest, an ENSEMBL ID of a gene you wish to find peaks associated with.
-  # cutoff - a numerical variable to filter corrleation values.
-  chr &lt;- coaccess[which(coaccess$Overlap1 == goi)[1],&quot;seqnames&quot;]
-  sub &lt;- coaccess[c(which(coaccess$Overlap1 == goi),
-     which(coaccess$Overlap2 == goi)),]
-  sub &lt;- sub[sub$correlation &gt;= cutoff,]
-  # Remove things not on the same chromosome.
-  sub &lt;- sub[sub$seqnames == chr,]
-  return(sub)
-}
-
-sub_cA &lt;- CorrelatedToGene(cA, goi = &quot;ENSGALG00000051297&quot;, cutoff = 0.3)
-
-strong_correlations &lt;- cA[cA$correlation &gt;= 0.6,]
-
-write_csv(strong_correlations, file = &quot;./Figure_Exports/Supplemental_Peak2Gene_Correlations.csv&quot;)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-text-begin -->
-<p>So we also want to check out where pseudotime places factors. Order them in time by first significant activation?</p>
-<!-- rnb-text-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBURkFQMkIgRkxJMSBSWFJHIE5SMkYxIFpCVEIxOCBhbmQgVFdJU1QxXG5hc3NheShNb3RpZl9Jbl9QZWFrc19TdW1tYXJ5JG1vdGlmTWF0Y2hlcylcblxuYGBgIn0= -->
-<pre class="r"><code># TFAP2B FLI1 RXRG NR2F1 ZBTB18 and TWIST1
-assay(Motif_In_Peaks_Summary$motifMatches)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucmVzIDwtIFBzZXVkb3RpbWVERTo6cnVuUHNldWRvdGltZURFKGdlbmUudmVjID0gcm93bmFtZXMoZ2VuZXNjb3JlX3NjZSlbMToxNV0sXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb3JpLnRibCA9IGNlbGxzX3BzZXVkb3RpbWUsXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc3ViLnRibCA9IE5VTEwsXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgbWF0ID0gZ2VuZXNjb3JlX3NjZSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBtb2RlbCA9IFwicWdhbVwiLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGFzc2F5LnVzZSA9IFwibG9nY291bnRzXCIsXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcXVhbnQgPSAwLjc1LFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1jLmNvcmVzID0gNjIpXG5cbmBgYCJ9 -->
+<pre class="r"><code>res &lt;- PseudotimeDE::runPseudotimeDE(gene.vec = rownames(genescore_sce)[1:15],
+                                     ori.tbl = cells_pseudotime,
+                                     sub.tbl = NULL,
+                                     mat = genescore_sce,
+                                     model = &quot;qgam&quot;,
+                                     assay.use = &quot;logcounts&quot;,
+                                     quant = 0.75,
+                                     mc.cores = 62)
 </code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiMzg0NzE2IHggNzQ2IHNwYXJzZSBNYXRyaXggb2YgY2xhc3MgXCJsZ0NNYXRyaXhcIlxuIn0= -->
-<pre><code>384716 x 746 sparse Matrix of class &quot;lgCMatrix&quot;</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiICAgW1sgc3VwcHJlc3NpbmcgMzUgY29sdW1uIG5hbWVzIOKAmEFybnRfMeKAmSwg4oCYQWhyLi5Bcm50XzLigJksIOKAmERkaXQzLi5DZWJwYV8z4oCZIC4uLiBdXVxuICAgW1sgc3VwcHJlc3NpbmcgMzUgY29sdW1uIG5hbWVzIOKAmEFybnRfMeKAmSwg4oCYQWhyLi5Bcm50XzLigJksIOKAmERkaXQzLi5DZWJwYV8z4oCZIC4uLiBdXVxuIn0= -->
-<pre><code>   [[ suppressing 35 column names ‘Arnt_1’, ‘Ahr..Arnt_2’, ‘Ddit3..Cebpa_3’ ... ]]
-   [[ suppressing 35 column names ‘Arnt_1’, ‘Ahr..Arnt_2’, ‘Ddit3..Cebpa_3’ ... ]]</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFxuIFsxLF0gLiAuIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFsyLF0gLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IHwgLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFszLF0gLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4gLiAuIC4gLiB8IC4gLiAuIC4gLiAuIC4uLi4uLlxuIFs0LF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4uLi4uLlxuIFs1LF0gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFs2LF0gLiAuIC4gLiAuIC4gfCAuIHwgLiAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFs3LF0gLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFs4LF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuIFs5LF0gLiB8IC4gLiB8IHwgLiAuIC4gLiB8IC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzEwLF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzExLF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzEyLF0gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4gLiAuIC4uLi4uLlxuWzEzLF0gLiAuIC4gLiAuIC4gLiAuIHwgfCAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4uLi4uLlxuWzE0LF0gfCAuIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIHwgfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4gLiB8IC4uLi4uLlxuXG4gLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uXG4gLi4uLi4uLi5zdXBwcmVzc2luZyA3MTEgY29sdW1ucyBhbmQgMzg0Njg4IHJvd3MgaW4gc2hvdygpOyBtYXliZSBhZGp1c3QgJ29wdGlvbnMobWF4LnByaW50PSAqLCB3aWR0aCA9ICopJ1xuIC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLlxuIn0= -->
-<pre><code>                                                                                  
- [1,] . . . . . . . . . | . . . . . . . | . . . . . . . . . . . . . . . . . ......
- [2,] . | . . . . . . . . . . . . . . . . . . . . . . . | | . . . . . . . . ......
- [3,] . | . . . . . . . . . . . . . . . . . . . . | . . . . . | . . . . . . ......
- [4,] . . . . . . . . . . . . . . . . . . | . . . . . . . . . . . . . . . | ......
- [5,] . . . . . | . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
- [6,] . . . . . . | . | . . . . . . . . | . . . . . . . . . . . . . . . . . ......
- [7,] . | . . . . . . . . . . . . . . . | . . . . . . . . . . . . . . . . . ......
- [8,] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
- [9,] . | . . | | . . . . | . . . . . . | . . . . . . . . . . . . . . . . . ......
-[10,] . . . . . . . . . . . . . . . | . . . . . . . . . . . . . . . . . . . ......
-[11,] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[12,] | . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | . . . ......
-[13,] . . . . . . . . | | . . . . . . . | . . . . . . . . . . . . . . . . | ......
-[14,] | . . . . . . . . | . . . . . . . | | . . . . . . . . . . . . | . . | ......
-
- ..............................
- ........suppressing 711 columns and 384688 rows in show(); maybe adjust &#39;options(max.print= *, width = *)&#39;
- ..............................</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiICAgW1sgc3VwcHJlc3NpbmcgMzUgY29sdW1uIG5hbWVzIOKAmEFybnRfMeKAmSwg4oCYQWhyLi5Bcm50XzLigJksIOKAmERkaXQzLi5DZWJwYV8z4oCZIC4uLiBdXVxuIn0= -->
-<pre><code>   [[ suppressing 35 column names ‘Arnt_1’, ‘Ahr..Arnt_2’, ‘Ddit3..Cebpa_3’ ... ]]</code></pre>
-<!-- rnb-output-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBcblszODQ3MDMsXSB8IHwgLiAuIC4gLiAuIHwgLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gLiAuIC4gLiB8IC4gLiAuIC4gLi4uLi4uXG5bMzg0NzA0LF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzM4NDcwNSxdIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4gfCB8IC4gLiB8IC4gLiAuIC4gLiAuLi4uLi5cblszODQ3MDYsXSAuIC4gLiAuIC4gLiAuIC4gLiAuIHwgLiAuIC4gfCAuIC4gLiAuIC4gfCAuIC4gLiB8IHwgLiAuIC4gLiAuIC4gLiAuIHwgLi4uLi4uXG5bMzg0NzA3LF0gfCB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzM4NDcwOCxdIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuLi4uLi5cblszODQ3MDksXSAuIHwgLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLi4uLi4uXG5bMzg0NzEwLF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IHwgLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzM4NDcxMSxdIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gfCAuIHwgfCB8IC4gLiAuIC4gLiB8IC4gLiAuIC4gLiAuLi4uLi5cblszODQ3MTIsXSAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLi4uLi4uXG5bMzg0NzEzLF0gLiAuIC4gLiAuIC4gLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4uLi4uLlxuWzM4NDcxNCxdIC4gLiAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gfCAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuLi4uLi5cblszODQ3MTUsXSAuIC4gLiAuIC4gLiAuIC4gLiB8IC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLi4uLi4uXG5bMzg0NzE2LF0gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiAuIC4gLiB8IC4uLi4uLlxuIn0= -->
-<pre><code>                                                                                      
-[384703,] | | . . . . . | . | . . . . . . . . . . . . | . . . . . . . | . . . . ......
-[384704,] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384705,] . . . . . . . | . . . . . . . . . . . . . . . | . | | . . | . . . . . ......
-[384706,] . . . . . . . . . . | . . . | . . . . . | . . . | | . . . . . . . . | ......
-[384707,] | | . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384708,] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384709,] . | . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384710,] . . . . . . . . . . . . . . . . . . . . . . . . . | | . . . . . . . . ......
-[384711,] . . . . . . . . . . . . . . . . . . . | . | | | . . . . . | . . . . . ......
-[384712,] . . . . . . . . . . . . . . . . . . . . . . . | . . . . . . . . . . . ......
-[384713,] . . . . . . . | . . . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384714,] . . . . . . . | . . . . . | . . . . . . . . . . . . . . . . . . . . . ......
-[384715,] . . . . . . . . . | . . . . . . . . . . . . . . . . . . . . . . . . . ......
-[384716,] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | ......</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3IgaW4gYGNocl9hc19sb2NhdGlvbnMoKWA6XG4hIENhbid0IHN1YnNldCBjb2x1bW5zIHRoYXQgZG9uJ3QgZXhpc3QuXG7inJYgQ29sdW1uIGBnYW0uZml0YCBkb2Vzbid0IGV4aXN0LlxuQmFja3RyYWNlOlxuICAxLiBQc2V1ZG90aW1lREU6OnJ1blBzZXVkb3RpbWVERSguLi4pXG4gIDMuIHRpZHlyOjo6dW5uZXN0LmRhdGEuZnJhbWUocmVzLCBjb2xzID0gIShnYW0uZml0IHwgZXhwdi5xdWFudGlsZSkpXG4gIDQuIHRpZHlzZWxlY3Q6OmV2YWxfc2VsZWN0KGVucXVvKGNvbHMpLCBkYXRhKVxuICA1LiB0aWR5c2VsZWN0Ojo6ZXZhbF9zZWxlY3RfaW1wbCguLi4pXG4gMTQuIHRpZHlzZWxlY3Q6Ojp2YXJzX3NlbGVjdF9ldmFsKC4uLilcbiAgICAgLi4uXG4gMjAuIHRpZHlzZWxlY3Q6Ojp3YWxrX29wZXJhbmQoZXhwcltbMl1dLCBkYXRhX21hc2ssIGNvbnRleHRfbWFzaylcbiAyMS4gdGlkeXNlbGVjdDo6OndhbGtfZGF0YV90cmVlKGV4cHIsIGRhdGFfbWFzaywgY29udGV4dF9tYXNrKVxuIDIyLiB0aWR5c2VsZWN0Ojo6YXNfaW5kaWNlc19zZWxfaW1wbCguLi4pXG4gMjMuIHRpZHlzZWxlY3Q6Ojphc19pbmRpY2VzX2ltcGwoeCwgdmFycywgY2FsbCA9IGNhbGwsIHN0cmljdCA9IHN0cmljdClcbiAyNC4gdGlkeXNlbGVjdDo6OmNocl9hc19sb2NhdGlvbnMoeCwgdmFycywgY2FsbCA9IGNhbGwpXG4ifQ== -->
+<pre><code>Error in `chr_as_locations()`:
+! Can&#39;t subset columns that don&#39;t exist.
+✖ Column `gam.fit` doesn&#39;t exist.
+Backtrace:
+  1. PseudotimeDE::runPseudotimeDE(...)
+  3. tidyr:::unnest.data.frame(res, cols = !(gam.fit | expv.quantile))
+  4. tidyselect::eval_select(enquo(cols), data)
+  5. tidyselect:::eval_select_impl(...)
+ 14. tidyselect:::vars_select_eval(...)
+     ...
+ 20. tidyselect:::walk_operand(expr[[2]], data_mask, context_mask)
+ 21. tidyselect:::walk_data_tree(expr, data_mask, context_mask)
+ 22. tidyselect:::as_indices_sel_impl(...)
+ 23. tidyselect:::as_indices_impl(x, vars, call = call, strict = strict)
+ 24. tidyselect:::chr_as_locations(x, vars, call = call)</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
+</div>
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiUiBOb3RlYm9vayIKb3V0cHV0OgogIGh0bWxfbm90ZWJvb2s6IAogICAgdG9jOiB5ZXMKICAgIGNvZGVfZm9sZGluZzogaGlkZQogICAgZmlnX3dpZHRoOiA4CiAgICBmaWdfaGVpZ2h0OiA2CmVkaXRvcl9vcHRpb25zOgogIGNodW5rX291dHB1dF90eXBlOiBpbmxpbmUKLS0tCgpFeHBsb3JhdGlvbiBvZiBidWlsZGluZyBHUk4ncyB1c2luZyBzY0FUQUMgZGF0YS4KClNvIGJhc2ljYWxseSwgdGhlIGlkZWEgaXMgdG8gY29tYmluZSB0aGUgcG9zaXRpdmUvbmVnYXRpdmUgcmVndWxhdG9yIHByZWRpY3Rpb24gZnJvbSBtb3RpZiBwcmVzZW5jZSBhbmQgcGVhayBhY3Rpdml0eSBvdmVyIHRpbWUgdG8gYnVpbGQgYSBuZXR3b3JrIG9mIHRyYW5zY3JpcHRpb24gZmFjdG9yIHJlZ3VsYXRpb24uIFRoaXMgd2F5LCB3ZSBjYW4gYXNzaWduIGFuIGF2ZXJhZ2Ugc3RyZW5ndGggYW5kIGRpcmVjdGlvbiB0byB0aGUgbW90aWYgcHJlc2VuY2Ugd2l0aGluIGFueSBnaXZlbiBwZWFrLiAKClRoZXJlIGFyZSBhIGZldyB3YXlzIHdlIHdpc2ggdG8gZmlsdGVyIHRoaXMuIDEuIFdlIHdhbnQgdG8gbG9vayBhdCBoaWdobHkgc3BlY2lmaWMgcGVha3MuIDIuIFdlIHdhbnQgdG8gY29uc2lkZXIgb25seSB0aG9zZSBoaWdobHkgc3BlY2lmaWMgcGVha3MgdGhhdCBhbHNvIGFyZSBsaW5rZWQgdG8gc3BlY2lmaWMgZ2VuZXMgKHZpYSBHZW5lc2NvcmUpLiBUaGVzZSBtYXkgYmUgdG9vIHJlc3RyaWN0aXZlIGluaXRpYWxseSwgYnV0IHdlIHdpbGwgc2VlISAKClNvIGl0IHR1cm5zIG91dCB0aGUgR2VuZXNjb3JlIGlzbid0IHJlbGF0ZWQgdG8gdGhlIHBlYWsgY29hY2Nlc3NhYmlsaXR5IGF0IGFsbC4gSXQncyBiYXNlZCBvbiB0aWxlLW1hdHJpeC4KYGBge3IgTG9hZGluZyBsaWJyYXJpZXMgYW5kIGRhdGEsIG1lc3NhZ2U9RkFMU0UsIHdhcm5pbmc9RkFMU0V9CmxpYnJhcnkoQXJjaFIpCmxpYnJhcnkoa25pdHIpCmxpYnJhcnkoVEZCU1Rvb2xzKQpsaWJyYXJ5KENvbXBsZXhIZWF0bWFwKQpsaWJyYXJ5KGdncGxvdDIpCmxpYnJhcnkoZ2dyZXBlbCkKbGlicmFyeShTZXVyYXQpCmxpYnJhcnkoU2lnbmFjKQpsaWJyYXJ5KEJTZ2Vub21lLkdnYWxsdXMuRU5TRU1CTC5nYWxHYWw2KQpsaWJyYXJ5KEdlbm9taWNGZWF0dXJlcykKbGlicmFyeShvcmcuR2cuZWcuZGIpCmxpYnJhcnkocWRhcFRvb2xzKQpsaWJyYXJ5KHN0cmluZ3IpCmxpYnJhcnkocmVhZHIpCgphZGRBcmNoUlRocmVhZHModGhyZWFkcyA9IDYyKSAKc2V0LnNlZWQoMSkKcHJvak5DIDwtIGxvYWRBcmNoUlByb2plY3QocGF0aCA9ICIvZGF0YS9BdXN0aW4vMTBYc2NBVEFDL0FyY2hSX2RhdGFfZmluYWxfdGhlc2lzLyIpCgpUeERiX2dhbEdhbDYgPC0gbWFrZVR4RGJGcm9tRW5zZW1ibChvcmdhbmlzbSA9ICJHYWxsdXMgZ2FsbHVzIiwgcmVsZWFzZSA9IDEwMykKYXJjaF9nZzZfZ2VuZXMgPC0gY3JlYXRlR2VuZUFubm90YXRpb24oVHhEYiA9IFR4RGJfZ2FsR2FsNiwgT3JnRGIgPSBvcmcuR2cuZWcuZGIsIGFubm9TdHlsZSA9ICJFTlNFTUJMIikKZW5zZW1ibDJzeW1ib2wgPC0gYXMuZGF0YS5mcmFtZShtY29scyhhcmNoX2dnNl9nZW5lcyRnZW5lcykpCmBgYAoKTGV0J3MgZXhwbG9yZSB0aGUgQ29BY2Nlc3NpYmlsaXR5IG9iamVjdC4gU3BlY2lmaWNhbGx5LCB3ZSBhcmUgbG9va2luZyBmb3IgYSB3YXkgdG8gbGluayBwZWFrcyB0byBnZW5lcy4gSSB0aGluayB0aGUgZWFzaWVzdCB3YXkgaXMganVzdCB0byBjaGVjayBpZiBlaXRoZXIgb2YgdGhlIHBlYWtzIG92ZXJsYXAgdGhlIGdlbmUncyBwcm9tb3RlciByZWdpb24gKC01a2IgdG8gKzFrYikuCgpgYGB7cn0KcGVha3NldCA8LSBnZXRQZWFrU2V0KHByb2pOQykKQWxsX1BlYWtfUmVnaW9ucyA8LSBhcy5kYXRhLmZyYW1lKHBlYWtzZXQpCkFsbF9QZWFrX1JlZ2lvbnMkaWR4IDwtIGFzLmNoYXJhY3RlcihBbGxfUGVha19SZWdpb25zJGlkeCkKQWxsX1BlYWtfUmVnaW9ucyRQZWFrSUQgPC0gcGFzdGUwKEFsbF9QZWFrX1JlZ2lvbnMkc2VxbmFtZXMsICJfIiwgQWxsX1BlYWtfUmVnaW9ucyRzdGFydCwgIl8iLCBBbGxfUGVha19SZWdpb25zJGVuZCkKCiMgR2V0IGNvQWNjZXNzaWJsZSBlbGVtZW50cwpjQSA8LSBhcy5kYXRhLmZyYW1lKGdldENvQWNjZXNzaWJpbGl0eSgKICAgIEFyY2hSUHJvaiA9IHByb2pOQywKICAgIGNvckN1dE9mZiA9IDAuMywKICAgIHJlc29sdXRpb24gPSAxLAogICAgcmV0dXJuTG9vcHMgPSBGKSkKCiMgQW5ub3RhdGUgd2l0aCBQZWFrSUQKYiA8LSBBbGxfUGVha19SZWdpb25zWyxjKCJpZHgiLCJQZWFrSUQiKV0KYiA8LSBiW2NBJHF1ZXJ5SGl0cyxdCmNBJFBlYWsxIDwtIGIkUGVha0lECmMgPC0gQWxsX1BlYWtfUmVnaW9uc1ssYygiaWR4IiwiUGVha0lEIildCmMgPC0gY1tjQSRzdWJqZWN0SGl0cyxdCmNBJFBlYWsyIDwtIGMkUGVha0lECgojIE1ha2UgYSBHUmFuZ2Ugb2JqZWN0IHdpdGggcHJvbW90ZXJzLgpnYWxHYWw2X3Byb20gPC0gdHJpbShwcm9tb3RlcnMoZ2VuZXMoVHhEYl9nYWxHYWw2KSwgdXBzdHJlYW0gPSA1MDAwLCBkb3duc3RyZWFtID0gMTAwMCkpCmdhbEdhbDZfcHJvbSRnZW5lX3N5bWJvbCA8LSBsb29rdXAodGVybXMgPSBnYWxHYWw2X3Byb20kZ2VuZV9pZCwga2V5Lm1hdGNoID0gZW5zZW1ibDJzeW1ib2wpCgojIFdoaWNoIGNvQWNjZXNzaWJsZSBlbGVtZW50cyBoYXZlIGEgcGVhayBpbiBhIHByb21vdGVyPwpQZWFrMV9jb29yZHMgPC0gc3RyX3NwbGl0KGNBJFBlYWsxLCBwYXR0ZXJuID0gIl8iLCBuID0gMywgc2ltcGxpZnkgPSBUKQpQZWFrMV9vdmwgPC0gbWFrZUdSYW5nZXNGcm9tRGF0YUZyYW1lKGRmID0gZGF0YS5mcmFtZShjaHIgPSBQZWFrMV9jb29yZHNbLDFdLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBzdGFydCA9IFBlYWsxX2Nvb3Jkc1ssMl0sCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGVuZCA9IFBlYWsxX2Nvb3Jkc1ssM10pKQpoaXRzIDwtIGZpbmRPdmVybGFwcyhQZWFrMV9vdmwsIGdhbEdhbDZfcHJvbSkKClBlYWsxX292bCRnZW5lX2lkIDwtIGlmZWxzZShQZWFrMV9vdmwgJWluJSBQZWFrMV9vdmxbaGl0c0Bmcm9tXSwgZ2FsR2FsNl9wcm9tW2hpdHNAdG9dJGdlbmVfaWQsIE5BKQoKClBlYWsyX2Nvb3JkcyA8LSBzdHJfc3BsaXQoY0EkUGVhazIsIHBhdHRlcm4gPSAiXyIsIG4gPSAzLCBzaW1wbGlmeSA9IFQpClBlYWsyX292bCA8LSBtYWtlR1Jhbmdlc0Zyb21EYXRhRnJhbWUoZGYgPSBkYXRhLmZyYW1lKGNociA9IFBlYWsyX2Nvb3Jkc1ssMV0sCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHN0YXJ0ID0gUGVhazJfY29vcmRzWywyXSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZW5kID0gUGVhazJfY29vcmRzWywzXSkpCmhpdHMyIDwtIGZpbmRPdmVybGFwcyhQZWFrMl9vdmwsIGdhbEdhbDZfcHJvbSkKClBlYWsyX292bCRnZW5lX2lkIDwtIGlmZWxzZShQZWFrMl9vdmwgJWluJSBQZWFrMl9vdmxbaGl0c0Bmcm9tXSwgZ2FsR2FsNl9wcm9tW2hpdHNAdG9dJGdlbmVfaWQsIE5BKQoKY0EkT3ZlcmxhcDEgPC0gUGVhazFfb3ZsJGdlbmVfaWQKY0EkT3ZlcmxhcDIgPC0gUGVhazJfb3ZsJGdlbmVfaWQKCiMgQW5ub3RhdGUgYXMgRGlzdGFsLURpc3RhbCwgRGlzdGFsLVByb20sIG9yIFByb20tUHJvbQpjQSRPdmVybGFwX1R5cGUgPC0gaWZlbHNlKGlzLm5hKGNBJE92ZXJsYXAxKSAmIGlzLm5hKGNBJE92ZXJsYXAyKSwgIkRpc3RhbC1EaXN0YWwiLAogICAgICAgICAgICAgICAgICAgICAgICAgIGlmZWxzZSghaXMubmEoY0EkT3ZlcmxhcDEpICYgIWlzLm5hKGNBJE92ZXJsYXAyKSwgIlByb21vdGVyLVByb21vdGVyIiwgIkRpc3RhbC1Qcm9tb3RlciIpKQoKY0EkU3ltYm9sMSA8LSAgcWRhcFRvb2xzOjpsb29rdXAoY0EkT3ZlcmxhcDEsIGVuc2VtYmwyc3ltYm9sKQpjQSRTeW1ib2wyIDwtICBxZGFwVG9vbHM6Omxvb2t1cChjQSRPdmVybGFwMiwgZW5zZW1ibDJzeW1ib2wpCgpDb3JyZWxhdGVkVG9HZW5lIDwtIGZ1bmN0aW9uKGNvYWNjZXNzID0gY0EsIGdvaSA9ICIiLCBjdXRvZmYgPSAwLjUpewogICMgQSBmdW5jdGlvbiB0byBzZWxlY3QgaWRlbnRpZnkgYWxsIG9mIHRoZSBwZWFrcyB0aGF0IGFyZSBhc3NvY2lhdGVkIHdpdGggYSBjZXJ0YWluIGdlbmUgZ2l2ZW4gYSBjb3JyZWxhdGlvbiBjdXRvZmYuCiAgIyBJbnB1dHMKICAjIGNvYWNjZXNzIC0gQSBmb3JtYXR0ZWQgY29hY2Nlc3NhYmlsaXR5IHJlcG9ydCB3aXRoIGF0IGxlYXN0IFBlYWsxLCBQZWFrMiwgT3ZlcmxhcDEsIE92ZXJsYXAyLCBhbmQgY29ycmVsYXRpb24uCiAgIyBnb2kgLSBHZW5lIG9mIEludGVyZXN0LCBhbiBFTlNFTUJMIElEIG9mIGEgZ2VuZSB5b3Ugd2lzaCB0byBmaW5kIHBlYWtzIGFzc29jaWF0ZWQgd2l0aC4KICAjIGN1dG9mZiAtIGEgbnVtZXJpY2FsIHZhcmlhYmxlIHRvIGZpbHRlciBjb3JybGVhdGlvbiB2YWx1ZXMuCiAgY2hyIDwtIGNvYWNjZXNzW3doaWNoKGNvYWNjZXNzJE92ZXJsYXAxID09IGdvaSlbMV0sInNlcW5hbWVzIl0KICBzdWIgPC0gY29hY2Nlc3NbYyh3aGljaChjb2FjY2VzcyRPdmVybGFwMSA9PSBnb2kpLAogICAgIHdoaWNoKGNvYWNjZXNzJE92ZXJsYXAyID09IGdvaSkpLF0KICBzdWIgPC0gc3ViW3N1YiRjb3JyZWxhdGlvbiA+PSBjdXRvZmYsXQogICMgUmVtb3ZlIHRoaW5ncyBub3Qgb24gdGhlIHNhbWUgY2hyb21vc29tZS4KICBzdWIgPC0gc3ViW3N1YiRzZXFuYW1lcyA9PSBjaHIsXQogIHJldHVybihzdWIpCn0KCnN1Yl9jQSA8LSBDb3JyZWxhdGVkVG9HZW5lKGNBLCBnb2kgPSAiRU5TR0FMRzAwMDAwMDUxMjk3IiwgY3V0b2ZmID0gMC4zKQoKc3Ryb25nX2NvcnJlbGF0aW9ucyA8LSBjQVtjQSRjb3JyZWxhdGlvbiA+PSAwLjYsXQoKd3JpdGVfY3N2KHN0cm9uZ19jb3JyZWxhdGlvbnMsIGZpbGUgPSAiLi9GaWd1cmVfRXhwb3J0cy9TdXBwbGVtZW50YWxfUGVhazJHZW5lX0NvcnJlbGF0aW9ucy5jc3YiKQpgYGAKClNvIHdlIGFsc28gd2FudCB0byBjaGVjayBvdXQgd2hlcmUgcHNldWRvdGltZSBwbGFjZXMgZmFjdG9ycy4gT3JkZXIgdGhlbSBpbiB0aW1lIGJ5IGZpcnN0IHNpZ25pZmljYW50IGFjdGl2YXRpb24/CgpgYGB7cn0KIyBUaGVzZSBtaWdodCBiZSBpbnRlcmVzdGluZyBhbmQgdmVyeSBoZWxwZnVsIQpNb3RpZl9Jbl9QZWFrc19TdW1tYXJ5IDwtIHJlYWRSRFMoIi9kYXRhL0F1c3Rpbi8xMFhzY0FUQUMvQXJjaFJfZGF0YV9maW5hbF9iYWNrdXAvQW5ub3RhdGlvbnMvTW90aWYtSW4tUGVha3MtU3VtbWFyeS5yZHMiKQojIAoKIyBGb2N1cyBvbiBtZXNlbmN5aG1hbCBjaXJjdWl0IGNoYXJhY3Rlcml6YXRpb24uCgojIFRGQVAyQiBGTEkxIFJYUkcgTlIyRjEgWkJUQjE4IGFuZCBUV0lTVDEKCnByb2pOQ19nZW5lc2NvcmUgPC0gZ2V0TWF0cml4RnJvbVByb2plY3QoQXJjaFJQcm9qID0gcHJvak5DLCB1c2VNYXRyaXggPSAiR2VuZVNjb3JlTWF0cml4IikKZ2VuZXNjb3JlX21hdHJpeCA8LSBwcm9qTkNfZ2VuZXNjb3JlQGFzc2F5c0BkYXRhJEdlbmVTY29yZU1hdHJpeAoKbHNpX3JlZCA8LSBnZXRSZWR1Y2VkRGltcyhwcm9qTkMsIHJlZHVjZWREaW1zID0gIkl0ZXJhdGl2ZUxTSSIpCnVtYXBfcmVkIDwtIGdldEVtYmVkZGluZyhwcm9qTkMsIlVNQVAiKQoKZ2VuZXNjb3JlX3NjZSA8LSBTaW5nbGVDZWxsRXhwZXJpbWVudCgKICBnZW5lc2NvcmVfbWF0cml4LAogIHJlZHVjZWREaW1zID0gbGlzdChsc2kgPSBsc2lfcmVkLCB1bWFwID0gdW1hcF9yZWQpLAogIGFsdEV4cHMgPSBsaXN0KCksCiAgcm93UGFpcnMgPSBsaXN0KCksCiAgY29sUGFpcnMgPSBsaXN0KCksCiAgbWFpbkV4cE5hbWUgPSAiR2VuZVNjb3JlIgopCgpjb2xEYXRhKGdlbmVzY29yZV9zY2UpIDwtIHByb2pOQ0BjZWxsQ29sRGF0YQpyb3duYW1lcyhnZW5lc2NvcmVfc2NlKSA8LSAKYXNzYXlOYW1lcyhnZW5lc2NvcmVfc2NlKSA8LSAiY291bnRzIgoKbGlic2l6ZXMgPC0gY29sU3Vtcyhhc3NheShnZW5lc2NvcmVfc2NlKSkKc2l6ZS5mYWN0b3JzIDwtIGxpYnNpemVzL21lYW4obGlic2l6ZXMpCmxvZ2NvdW50cyhnZW5lc2NvcmVfc2NlKSA8LSBsb2cyKHQodChhc3NheShnZW5lc2NvcmVfc2NlKSkvc2l6ZS5mYWN0b3JzKSArIDEpCgojIEdldCBhc3NvY2lhdGVkIHJlZ3VsYXRvcnkgcmVnaW9ucwphZGRHZW5lSW50ZWdyYXRpb25NYXRyaXgoCiAgcHJvak5DLAogIHVzZU1hdHJpeCA9ICJHZW5lU2NvcmVNYXRyaXgiLAogIHNlUk5BID0gZ2VuZXNjb3JlX3NjZQopCgphZGRQZWFrMkdlbmVMaW5rcyhwcm9qTkMsIAogICAgICAgICAgICAgICAgICApCnBsb3RQZWFrMkdlbmVIZWF0bWFwKCkKYGBgCgo=</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiUiBOb3RlYm9vayIKb3V0cHV0OiBodG1sX25vdGVib29rCi0tLQoKIyBMZXQncyBpbnZlc3RpZ2F0ZSBQc2V1ZG90aW1lREUKCmBgYHtyfQpzdXBwcmVzc1BhY2thZ2VTdGFydHVwTWVzc2FnZXMoewogIGxpYnJhcnkoQXJjaFIpCiAgbGlicmFyeShrbml0cikKICBsaWJyYXJ5KFRGQlNUb29scykKICBsaWJyYXJ5KENvbXBsZXhIZWF0bWFwKQogIGxpYnJhcnkoZ2dwbG90MikKICBsaWJyYXJ5KGdncmVwZWwpCiAgbGlicmFyeShxZGFwVG9vbHMpCiAgbGlicmFyeShwYXJhbGxlbCkKICBsaWJyYXJ5KFBzZXVkb3RpbWVERSkKICBsaWJyYXJ5KFNpbmdsZUNlbGxFeHBlcmltZW50KQogIGxpYnJhcnkoc2xpbmdzaG90KQogIGxpYnJhcnkodGliYmxlKQogIGxpYnJhcnkoZHBseXIpCiAgbGlicmFyeShzY2FsZXMpCiAgbGlicmFyeShpcmxiYSkKfSkKCgphZGRBcmNoUlRocmVhZHModGhyZWFkcyA9IDYyKSAKc2V0LnNlZWQoMSkKcHJvak5DIDwtIGxvYWRBcmNoUlByb2plY3QocGF0aCA9ICIvZGF0YS9BdXN0aW4vMTBYc2NBVEFDL0FyY2hSX2RhdGFfZmluYWxfdGhlc2lzLyIpCnByb2pOQ0Bwcm9qZWN0TWV0YWRhdGEkb3V0cHV0RGlyZWN0b3J5IDwtICIuL0ZpZ3VyZV9FeHBvcnRzIgpwcm9qTkMgPC0gYWRkSW1wdXRlV2VpZ2h0cyhwcm9qTkMsIHNhbXBsZUNlbGxzID0gMTAwMDAsIG5SZXAgPSAzLCBrID0gMjApCmNsdXN0ZXJfdG9faWRlbnRpdHkgPC0gZGF0YS5mcmFtZShjbHVzdGVyID0gcGFzdGUwKCJDIiwxOjEwKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlkZW50aXR5ID0gYygiQzFfTWVsYW5vY3l0ZXMiLCJDMl9TZW5zb3J5X0dsaWEiLCJDM19JbnRfTWVzZW5jaHltZSIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIkM0X011bHRpcG90ZW50X05DIiwiQzVfSGluZGJyYWluX05ldXJvbnMiLCJDNl9Tb21hdG9zZW5zb3J5X05ldXJvbnMiLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJDN19NaWRicmFpbl9OZXVyb25zIiwiQzhfRWFybHlfTWVzZW5jaHltZSIsIkM5X1NlbnNvcnlfTmV1cm9ucyIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIkMxMF9MYXRlX01lc2VuY2h5bWUiKSkKcHJvak5DJENlbGxfSWRlbnRpdHkgPC0gbG9va3VwKHByb2pOQyRDbHVzdGVycywgY2x1c3Rlcl90b19pZGVudGl0eSkKYGBgCgpgYGB7cn0KcHJvak5DX2dlbmVzY29yZSA8LSBnZXRNYXRyaXhGcm9tUHJvamVjdChBcmNoUlByb2ogPSBwcm9qTkMsIHVzZU1hdHJpeCA9ICJHZW5lU2NvcmVNYXRyaXgiKQoKZ2VuZXNjb3JlX21hdHJpeCA8LSBwcm9qTkNfZ2VuZXNjb3JlQGFzc2F5c0BkYXRhJEdlbmVTY29yZU1hdHJpeAoKIyBOZWdhdGl2ZSBudW1iZXJzIGFuZ3J5LiBTY2FsZSBmcm9tIDAtMTAwPwojIAojIG1heHMgPC0gYXBwbHkobW90aWZzX21hdHJpeCwgMiwgbWF4KQojIG1pbnMgPC0gYXBwbHkobW90aWZzX21hdHJpeCwgMiwgbWluKQojIG1vdGlmc19tYXRyaXggPC0gc2NhbGUobW90aWZzX21hdHJpeCwgY2VudGVyID0gbWlucywgc2NhbGUgPSBtYXhzIC0gbWlucykKIyAKIyAgCgpsc2lfcmVkIDwtIGdldFJlZHVjZWREaW1zKHByb2pOQywgcmVkdWNlZERpbXMgPSAiSXRlcmF0aXZlTFNJIikKdW1hcF9yZWQgPC0gZ2V0RW1iZWRkaW5nKHByb2pOQywiVU1BUCIpCgpnZW5lc2NvcmVfc2NlIDwtIFNpbmdsZUNlbGxFeHBlcmltZW50KAogIGdlbmVzY29yZV9tYXRyaXgsCiAgcmVkdWNlZERpbXMgPSBsaXN0KGxzaSA9IGxzaV9yZWQsIHVtYXAgPSB1bWFwX3JlZCksCiAgYWx0RXhwcyA9IGxpc3QoKSwKICByb3dQYWlycyA9IGxpc3QoKSwKICBjb2xQYWlycyA9IGxpc3QoKSwKICBtYWluRXhwTmFtZSA9ICJHZW5lU2NvcmUiCikKCmNvbERhdGEoZ2VuZXNjb3JlX3NjZSkgPC0gcHJvak5DQGNlbGxDb2xEYXRhCnJvd25hbWVzKGdlbmVzY29yZV9zY2UpIDwtIAphc3NheU5hbWVzKGdlbmVzY29yZV9zY2UpIDwtICJjb3VudHMiCgpsaWJzaXplcyA8LSBjb2xTdW1zKGFzc2F5KGdlbmVzY29yZV9zY2UpKQpzaXplLmZhY3RvcnMgPC0gbGlic2l6ZXMvbWVhbihsaWJzaXplcykKbG9nY291bnRzKGdlbmVzY29yZV9zY2UpIDwtIGxvZzIodCh0KGFzc2F5KGdlbmVzY29yZV9zY2UpKS9zaXplLmZhY3RvcnMpICsgMSkKCgoKY2VsbHNfcHNldWRvdGltZSA8LSBkYXRhLmZyYW1lKGNlbGxzID0gcm93bmFtZXMoZ2VuZXNjb3JlX3NjZUBjb2xEYXRhKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHBzZXVkb3RpbWUgPSBnZW5lc2NvcmVfc2NlJGhvdXJfYWRqX3BzZXVkb3RpbWUpCgpyZXMgPC0gUHNldWRvdGltZURFOjpydW5Qc2V1ZG90aW1lREUoZ2VuZS52ZWMgPSByb3duYW1lcyhnZW5lc2NvcmVfc2NlKVsxOjE1XSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIG9yaS50YmwgPSBjZWxsc19wc2V1ZG90aW1lLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc3ViLnRibCA9IE5VTEwsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBtYXQgPSBnZW5lc2NvcmVfc2NlLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgbW9kZWwgPSAicWdhbSIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBhc3NheS51c2UgPSAibG9nY291bnRzIiwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHF1YW50ID0gMC43NSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1jLmNvcmVzID0gNjIpCgpQc2V1ZG90aW1lREU6OnBsb3RDdXJ2ZShnZW5lLnZlYyA9IHJlcyRnZW5lWzE6NV0sCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBvcmkudGJsID0gY2VsbHNfcHNldWRvdGltZSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1hdCA9IGdlbmVzY29yZV9zY2UsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBtb2RlbC5maXQgPSByZXMkZ2FtLmZpdCkKYGBgCgo=</div>
 
 
 
@@ -667,8 +379,8 @@ $(document).ready(function () {
 <!-- code folding -->
 <script>
 $(document).ready(function () {
-  window.initializeSourceEmbed("4_ArchR_GRN_Networks.Rmd");
-  window.initializeCodeFolding("hide" === "show");
+  window.initializeSourceEmbed("5_PseudotimeDE.Rmd");
+  window.initializeCodeFolding("show" === "show");
 });
 </script>
 

@@ -26,13 +26,13 @@ suppressPackageStartupMessages({
 
 addArchRThreads(threads = 62) 
 set.seed(1)
-projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final/")
+projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesis/")
 projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
 projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
 cluster_to_identity <- data.frame(cluster = paste0("C",1:10),
                                   identity = c("C1_Melanocytes","C2_Sensory_Glia","C3_Int_Mesenchyme",
-                                               "C4_Multipotent_NC","C5_Neural_2","C6_Int_Neural",
-                                               "C7_Neural_1","C8_Early_Mesenchyme","C9_Sensory_Neurons",
+                                               "C4_Multipotent_NC","C5_Hindbrain_Neurons","C6_Somatosensory_Neurons",
+                                               "C7_Midbrain_Neurons","C8_Early_Mesenchyme","C9_Sensory_Neurons",
                                                "C10_Late_Mesenchyme"))
 projNC$Cell_Identity <- lookup(projNC$Clusters, cluster_to_identity)
 ```
@@ -126,16 +126,16 @@ plotPDF(end2, name = "Plot-UMAP-SensoryNeurons.pdf", ArchRProj = projNC, addDOC 
 end2
 
 end3 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
-                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C7_Neural_1"],
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C7_Midbrain_Neurons"],
                     name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
-plotPDF(end3, name = "Plot-UMAP-Neural_1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(end3, name = "Plot-UMAP-Midbrain_Neurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 end3
 
 end4 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
-                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C5_Neural_2"],
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C5_Hindbrain_Neurons"],
                     name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
-plotPDF(end4, name = "Plot-UMAP-Neural_2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(end4, name = "Plot-UMAP-Hindbrain_Neurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 end4
 
@@ -145,6 +145,13 @@ end5 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
 plotPDF(end5, name = "Plot-UMAP-Late_Mesenchyme.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 end5
+
+end6 <- plotEmbedding(projNC, embedding = "UMAP", colorBy = "cellColData",
+                      highlightCells = projNC$cellNames[projNC$Cell_Identity == "C6_Somatosensory_Neurons"],
+                    name = "Cell_Identity", plotAs = "points", size = 0.2, rastr = F)
+plotPDF(end6, name = "Plot-UMAP-Somatosensory_Neurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+end6
 ```
 
 
@@ -183,6 +190,7 @@ arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
 arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
 
+# TODO recover doublets.
 doublet_cells <- as.character(read.csv(file = "doublet_cells.csv", row.names = 1)[,1])
 
 projNC_pre <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_Prefiltered/")
@@ -404,6 +412,8 @@ rownames(temp) <- Cluster_Motifs@elementMetadata$name
 
 temp_f <- temp[unique(top_Motifs$name),]
 
+temp_f_t <- t(temp_f)
+
 # Who do we want to label?
 
 label_motifs <- c("TWIST1_741", "OTX2_718","SNAI2_729",
@@ -416,16 +426,22 @@ label_motifs <- c("TWIST1_741", "OTX2_718","SNAI2_729",
                   "SOX10_407","TLX2_555","LHX5_500","LBX2_193","GBX1_372",
                   "PITX3_205","Arid3a_43","RHOXF1_210","MITF_707")
 
-label_index <- which(rownames(temp_f) %in% label_motifs)
-label_text <- toupper(stringr::str_split(rownames(temp_f)[label_index], pattern = "_", simplify = T)[,1])
+label_index <- which(colnames(temp_f_t) %in% label_motifs)
+label_text <- toupper(stringr::str_split(colnames(temp_f_t)[label_index], pattern = "_", simplify = T)[,1])
 
-heatmap1 <- ComplexHeatmap::Heatmap(matrix = temp_f, cluster_rows = T, 
-                        cluster_columns = T,
-                        show_row_names = F,
-                        use_raster = F, col = as.character(ArchRPalettes$blueYellow)) + 
-  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+heatmap1 <- ComplexHeatmap::Heatmap(matrix = temp_f_t,
+                                    cluster_rows = T,
+                                    cluster_columns = T,
+                                    show_row_names = T,
+                                    show_column_names = F,
+                                    use_raster = F,
+                                    col = as.character(ArchRPalettes$blueYellow),
+                                    bottom_annotation = HeatmapAnnotation(
+                                      names = anno_mark(at = label_index,
+                                                        labels = label_text, which = "row", labels_rot = 90)))
 
-plotPDF(heatmap1, name = "Plot-Motif-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 10)
+ 
+plotPDF(heatmap1, name = "Plot-Motif-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 10, height = 8)
 
 heatmap1
 ```
@@ -447,49 +463,56 @@ p9[[1]]
 p9b <- plotTrajectory(projNC, trajectory = "C10END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9b[[1]], name = "Plot-UMAP-Pseudotime-mesenchyme.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9b[[1]], name = "Plot-UMAP-Pseudotime-C10END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9b[[1]]
 
 p9c <- plotTrajectory(projNC, trajectory = "C5END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9c[[1]], name = "Plot-UMAP-Pseudotime-Neural2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9c[[1]], name = "Plot-UMAP-Pseudotime-C5END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9c[[1]]
 
 p9d <- plotTrajectory(projNC, trajectory = "C2END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9d[[1]], name = "Plot-UMAP-Pseudotime-SensoryGlia.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9d[[1]], name = "Plot-UMAP-Pseudotime-C2END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9d[[1]]
 
 p9e <- plotTrajectory(projNC, trajectory = "C9END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9e[[1]], name = "Plot-UMAP-Pseudotime-SensoryNeurons.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9e[[1]], name = "Plot-UMAP-Pseudotime-C9END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9e[[1]]
 
 p9f <- plotTrajectory(projNC, trajectory = "C1END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9f[[1]], name = "Plot-UMAP-Pseudotime-Melanocytes.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9f[[1]], name = "Plot-UMAP-Pseudotime-C1END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9f[[1]]
 
 p9g <- plotTrajectory(projNC, trajectory = "C7END",
                           colorBy = "cellColData", name = "hour_adj_pseudotime",
                           plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
-plotPDF(p9g[[1]], name = "Plot-UMAP-Pseudotime-Neural1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+plotPDF(p9g[[1]], name = "Plot-UMAP-Pseudotime-C7END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9g[[1]]
+
+p9h <- plotTrajectory(projNC, trajectory = "C6END",
+                          colorBy = "cellColData", name = "hour_adj_pseudotime",
+                          plotAs = "points", addArrow = F, embedding = "UMAP", rastr = F)
+plotPDF(p9h[[1]], name = "Plot-UMAP-Pseudotime-C6END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
+
+p9h[[1]]
 ```
 
 ## B
 Motifs that change over pseudotime.
-Highlighting the mesencyhme, neural 1, neural 2, sensory ganglia, and sensory neuron lineages.
+Highlighting the mesencyhme, midbrain, somatosensory, and hindbrain neurons, sensory ganglia, and sensory neuron lineages.
 First we have to isolate the cells of that lineage to perform the analysis on (differentially enriched).
 Then, we aggregate transcription factor signal by family to reduce noise.
 Finally, we plot a heatmap and label specific transcription factors of interest in each lineage.
@@ -663,10 +686,6 @@ matrix_agg_scores <- function(input = sm_mat, transpose = T) {
 ```
 
 ```{r Mesenchyme TF over pseudotime}
-# Cell names along mesenchyme trajectory
-mes_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C8","C10")]
-
-which(projNC$cellNames %in% mes_cells)
 # Motif scores per cell
 motif_mat <- getMatrixFromProject(projNC,
                                   useMatrix = "MotifMatrix",
@@ -674,16 +693,23 @@ motif_mat <- getMatrixFromProject(projNC,
 motif_mat_raw <- assay(motif_mat)
 motif_mat_impute <- imputeMatrix(mat = motif_mat_raw,
                                  imputeWeights = getImputeWeights(projNC))
+
+
+# Cell names along mesenchyme trajectory
+mes_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C8","C10")]
+
+which(projNC$cellNames %in% mes_cells)
+
 # Order columns by pseudotime.
 mes_cells_df <- data.frame(Name = mes_cells,
                            Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in% c("C4","C3","C8","C10")])
 mes_cells_df <- mes_cells_df[order(mes_cells_df$Pseudotime),]
 
-motif_mat_impute_ord <- as.matrix(motif_mat_impute[,mes_cells_df$Name])
+mes_motif_mat_impute_ord <- as.matrix(motif_mat_impute[,mes_cells_df$Name])
 # Collapse by motif family.
-rownames(motif_mat_impute_ord) <- stringr::str_split(rownames(motif_mat_impute_ord), pattern = "_", simplify = T)[,1]
+rownames(mes_motif_mat_impute_ord) <- stringr::str_split(rownames(mes_motif_mat_impute_ord), pattern = "_", simplify = T)[,1]
 
-motif_mat_impute_ord <- t(matrix_agg_scores(motif_mat_impute_ord))
+mes_motif_mat_impute_ord <- t(matrix_agg_scores(mes_motif_mat_impute_ord))
 
 # Filter to only enriched TF's
 mes_Motifs <- getMarkerFeatures(
@@ -702,10 +728,10 @@ selected_motifs <- toupper(unique(mes_motif_df$name))
 selected_motifs <- stringr::str_split(selected_motifs, pattern = "_", simplify = T)[,1]
 
 # Remove motifs NOT in the family-collapsed matrix.
-selected_motifs <- selected_motifs[selected_motifs %in% rownames(motif_mat_impute_ord)]
+selected_motifs <- selected_motifs[selected_motifs %in% rownames(mes_motif_mat_impute_ord)]
 
 # Add in the family names
-selected_motifs <- c(selected_motifs, grep("_Family", rownames(motif_mat_impute_ord), value = T))
+selected_motifs <- c(selected_motifs, grep("_Family", rownames(mes_motif_mat_impute_ord), value = T))
 
 labels <- c("ETS1","RXRG","NR2F_Family","TWIST1",
             "ZBTB18","TFAP2_Family","JUNB",
@@ -717,7 +743,7 @@ label_index <- which(selected_motifs %in% labels)
 
 
 heatmap3 <- ComplexHeatmap::Heatmap(
-  matrix = motif_mat_impute_ord[selected_motifs,],
+  matrix = mes_motif_mat_impute_ord[selected_motifs,],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
   column_title = "Cells ordered in Pseudotime: Mesenchyme",
@@ -726,18 +752,18 @@ heatmap3 <- ComplexHeatmap::Heatmap(
 
 selected_motifs[row_order(heatmap3)]
 
-plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
+plotPDF(heatmap3, name = "Plot-Mesenchyme-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
 
 heatmap3
 ```
 
-```{r Neural 1 TF over pseudotime}
+```{r Hindbrain Neurons TF over pseudotime}
 # Cell names along Neural 1 trajectory
-neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C3","C5")]
+neural1_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C5")]
 
 # Order columns by pseudotime.
 neural1_cells_df <- data.frame(Name = neural1_cells,
-                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C3","C5")])
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C5")])
 
 neural1_cells_df <- neural1_cells_df[order(neural1_cells_df$Pseudotime),]
 
@@ -752,7 +778,7 @@ neural1_Motifs <- getMarkerFeatures(
     ArchRProj = projNC, 
     useMatrix = "MotifMatrix", 
     groupBy = "Clusters",
-    useGroups = c("C4","C3","C5"),
+    useGroups = c("C4","C5"),
     bias = c("log10(nFrags)"),
     maxCells = 750,
     testMethod = "wilcoxon",
@@ -771,8 +797,8 @@ selected_motifs <- c(selected_motifs, grep("_Family", rownames(ordered_neural1),
 
 # Choose which transcription factors to highlight
 labels <- c("POU5F1..SOX2","RFX_Family","MEIS1.VAR.2","SOXB_Family",
-            "PBX1","MEIS2","ZIC_Family","PBX2"
-            )
+            "PBX1","MEIS2","ZIC_Family","PBX2","MEIS3","PAX3","SOX10",
+            "POU3F2","RFX3")
 
 # Ensure labels are in selected motifs
 labels[!labels %in% selected_motifs]
@@ -783,27 +809,27 @@ heatmap4 <- ComplexHeatmap::Heatmap(
   matrix = ordered_neural1[selected_motifs,],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Neural 1",
+  column_title = "Cells ordered in Pseudotime: Hindbrain Neurons",
   col = as.character(ArchRPalettes$blueYellow)) + 
   rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
 
 unique(neural1_motif_df$name)[row_order(heatmap4)]
 
 
-plotPDF(heatmap4, name = "Plot-neural1-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
+plotPDF(heatmap4, name = "Plot-Hindbrain-Neurons-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
 
 heatmap4
 ```
 
-```{r Neural 2 TF over pseudotime}
+```{r Midbrain Neurons TF over pseudotime}
 # Cell names along Neural 2 trajectory
-neural2_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C6","C7")]
+neural2_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C7")]
 
 which(projNC$cellNames %in% neural2_cells)
 
 # Order columns by pseudotime.
 neural2_cells_df <- data.frame(Name = neural2_cells,
-                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C6","C7")])
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C7")])
 
 neural2_cells_df <- neural2_cells_df[order(neural2_cells_df$Pseudotime),]
 
@@ -814,7 +840,7 @@ neural2_Motifs <- getMarkerFeatures(
     ArchRProj = projNC, 
     useMatrix = "MotifMatrix", 
     groupBy = "Clusters",
-    useGroups = c("C4","C6","C7"),
+    useGroups = c("C4","C7"),
     bias = c("log10(nFrags)"),
     maxCells = 750,
     testMethod = "wilcoxon",
@@ -824,7 +850,8 @@ neural2_motif_df <- as.data.frame(getMarkers(neural2_Motifs, cutOff = "FDR <= 1e
 
 labels <- c("OTX2_718","Pou5f1..Sox2_38","Dmbx1_366",
             "PITX2_526","SOX2_730","Arid3a_43","PHOX2A_204",
-            "Shox2_211","GBX1_372","GATA1_690")
+            "Shox2_211","GBX1_372","GATA1_690",
+            "PITX3_205","RHOXF1_210")
 
 label_index <- which(unique(neural2_motif_df$name) %in% labels)
 label_text <- stringr::str_split(unique(neural2_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
@@ -834,14 +861,14 @@ heatmap5 <- ComplexHeatmap::Heatmap(
   matrix = ordered_neural2[unique(neural2_motif_df$name),],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Neural 2",
+  column_title = "Cells ordered in Pseudotime: Midbrain Neurons",
   col = as.character(ArchRPalettes$blueYellow)) + 
   rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
 
 unique(neural2_motif_df$name)[row_order(heatmap5)]
 
 
-plotPDF(heatmap5, name = "Plot-neural2-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
+plotPDF(heatmap5, name = "Plot-Midbrain-Neurons-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
 
 heatmap5
 ```
@@ -886,14 +913,14 @@ heatmap6 <- ComplexHeatmap::Heatmap(
   matrix = ordered_sensory[unique(sensory_motif_df$name),],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Sensory",
+  column_title = "Cells ordered in Pseudotime: Sensory Glia",
   col = as.character(ArchRPalettes$blueYellow)) + 
   rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
 
 unique(sensory_motif_df$name)[row_order(heatmap6)]
 
 
-plotPDF(heatmap6, name = "Plot-sensory-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
+plotPDF(heatmap6, name = "Plot-Sensory-Glia-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
 
 heatmap6
 ```
@@ -910,7 +937,7 @@ sensory_neuron_cells_df <- data.frame(Name = sensory_neuron_cells,
 
 sensory_neuron_cells_df <- sensory_neuron_cells_df[order(sensory_neuron_cells_df$Pseudotime),]
 
-ordered_sensory <- as.matrix(motif_mat_impute[,sensory_neuron_cells_df$Name])
+ordered_sensory_neuron <- as.matrix(motif_mat_impute[,sensory_neuron_cells_df$Name])
 
 # Filter to only enriched TF's
 sensory_neuron_Motifs <- getMarkerFeatures(
@@ -934,18 +961,122 @@ label_text <- stringr::str_split(unique(sensory_neuron_motif_df$name)[label_inde
 
 
 heatmap7 <- ComplexHeatmap::Heatmap(
-  matrix = ordered_sensory[unique(sensory_neuron_motif_df$name),],
+  matrix = ordered_sensory_neuron[unique(sensory_neuron_motif_df$name),],
   cluster_rows = T, cluster_columns = F, show_column_names = F,
   show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Sensory",
+  column_title = "Cells ordered in Pseudotime: Sensory Neurons",
   col = as.character(ArchRPalettes$blueYellow)) + 
   rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
 
 unique(sensory_neuron_motif_df$name)[row_order(heatmap7)]
 
-plotPDF(heatmap7, name = "Plot-sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 5)
+plotPDF(heatmap7, name = "Plot-Sensory-neuron-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
 
 heatmap7
+```
+
+```{r Somatosensory Neurons TF over pseudotime}
+# Cell names along Neural 2 trajectory
+neural3_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C6")]
+
+which(projNC$cellNames %in% neural3_cells)
+
+# Order columns by pseudotime.
+neural3_cells_df <- data.frame(Name = neural3_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C6")])
+
+neural3_cells_df <- neural3_cells_df[order(neural3_cells_df$Pseudotime),]
+
+ordered_neural3 <- as.matrix(motif_mat_impute[,neural3_cells_df$Name])
+
+# Filter to only enriched TF's
+neural3_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C4","C6"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+neural3_motif_df <- as.data.frame(getMarkers(neural3_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("OTX2_718","Pou5f1..Sox2_38","Dmbx1_366",
+            "PITX2_526","SOX2_730","Arid3a_43","PHOX2A_204",
+            "Shox2_211","GBX1_372","GATA1_690", "GSC_139",
+            "PITX3_205","RHOXF1_210","LBX2_193","EN1_128",
+            "LHX5_500","TLX2_555","Sox3_72","Msx3_199", "Alx4_338")
+
+label_index <- which(unique(neural3_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(neural3_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap8 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_neural3[unique(neural3_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Somatosensory Neurons",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(neural3_motif_df$name)[row_order(heatmap8)]
+
+
+plotPDF(heatmap8, name = "Plot-Somatosensory-Neurons-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
+
+heatmap8
+```
+```{r Melanocytes TF over pseudotime}
+# Cell names along Neural 2 trajectory
+melano_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C1")]
+
+which(projNC$cellNames %in% melano_cells)
+
+# Order columns by pseudotime.
+melano_cells_df <- data.frame(Name = melano_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C1")])
+
+melano_cells_df <- melano_cells_df[order(melano_cells_df$Pseudotime),]
+
+ordered_melano <- as.matrix(motif_mat_impute[,melano_cells_df$Name])
+
+# Filter to only enriched TF's
+melano_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C4","C1"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+melano_motif_df <- as.data.frame(getMarkers(melano_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("KLF14_235","SP1_632","NFYA_397","ELK3_248",
+            "ETV3_253","YY2_744","FOSL1..JUN.var.2_422",
+            "Creb5_326","ATF3_595","MITF_707","MLXIPL_157",
+            "EGR3_228","BHLHE41_122","TCFL5_635","TCF3_734")
+
+label_index <- which(unique(melano_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(melano_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap9 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_melano[unique(melano_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Melanocytes",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(melano_motif_df$name)[row_order(heatmap9)]
+
+
+plotPDF(heatmap9, name = "Plot-Melanocyte-Motif-Pseudotime-Heatmap.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
+
+heatmap9
 ```
 
 ## C
@@ -954,6 +1085,7 @@ Individual line plots of just top Motifs for Mesenchyme branch
 interesting_mesenchyme_factors <- c("ETS1","RXRG","NR2F_Family","TWIST1",
             "ZBTB18","TFAP2_Family","JUNB",
             "FOSL1..JUN","FLI1","SOXE_Family")
+
 
 # Motif Matrix for a gene within a particular trajectory
 # TWIST1
@@ -977,11 +1109,11 @@ p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
 plotPDF(p10[[2]], name = "Plot-ZBTB18-MOTIF-Mesencyme-Pseudotime-Line.pdf",
         ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
 
-# RXRG
+# ETS1
 p10 <- plotTrajectory(projNC, trajectory = "C10END", colorBy = "MotifMatrix",
-                      name = paste0("z:","RXRG_341"), continuousSet = "blueYellow",
+                      name = paste0("z:","ETS1_251"), continuousSet = "blueYellow",
                       plotAs = "points", addArrow = F)
-plotPDF(p10[[2]], name = "Plot-RXRG-MOTIF-Mesencyme-Pseudotime-Line.pdf",
+plotPDF(p10[[2]], name = "Plot-ETS1-MOTIF-Mesencyme-Pseudotime-Line.pdf",
         ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
 
 # FLI1
@@ -999,116 +1131,68 @@ plotPDF(p10[[2]], name = "Plot-TFAP2B-MOTIF-Mesencyme-Pseudotime-Line.pdf",
         ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
 
 ```
+```{r Line plots for Somatosensory Neurons over pseudotime}
+interesting_somato_factors <- c("PITX3","OTX2","LBX2","GBX1","TLX2","LHX5",
+                                "EN1","SOX3","PHOX2A")
+
+# Motif Matrix for a gene within a particular trajectory
+# PHOX2A
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","PHOX2A_204"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-PHOX2A-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# SOX3
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","Sox3_72"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-SOX3-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# LBX2
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","LBX2_193"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-LBX2-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# GBX1
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","GBX1_372"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-GBX1-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# TLX2
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","TLX2_555"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-TLX2-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+# LHX5
+s10 <- plotTrajectory(projNC, trajectory = "C6END", colorBy = "MotifMatrix",
+                      name = paste0("z:","LHX5_500"), continuousSet = "blueYellow",
+                      plotAs = "points", addArrow = F)
+plotPDF(s10[[2]], name = "Plot-LHX5-MOTIF-Somatosensory-Neurons-Pseudotime-Line.pdf",
+        ArchRProj = projNC, addDOC = FALSE, width = 6, height = 4)
+
+
+```
 
 ## D
 Individual line plots of top genes in Motif and Genescore.
-```{r}
-# Highlighting Specific Motifs across each branch
-# Three per branch.
-
-# Sensory Glia Markers
-glia_tf <- c("ASCL1.var.2_639","GRHL2_693","DLX5_464")
-glia_genescore <- c("GRHL3","ASCL1","DLX5")
-
-plotting_tfs <- getFeatures(projNC, select = paste(glia_tf, collapse="|"), useMatrix = "MotifMatrix")
-plotting_genes <- getFeatures(projNC, select = paste(glia_genescore, collapse="|"), useMatrix = "GeneScoreMatrix")
-
-# Let's see if ArchR fixed it's plotting of this yet...
-# Works, but doesn't like multiple features at a time.
-
-# Motif Matrix for a gene within a particular trajectory
-p11 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "MotifMatrix",
-                      name = paste0("z:","GRHL2_693"), continuousSet = "blueYellow",
-                      plotAs = "points", addArrow = F)
-# Genescore Matrix for a gene within a particular trajectory 
-p12 <- plotTrajectory(projNC, trajectory = "C2END", colorBy = "GeneScoreMatrix",
-                      name = "GRHL3", addArrow = F, plotAs = "points",
-                      rastr = F, continuousSet = "horizonExtra")
-
-comb_umap <- ggAlignPlots(p11[[1]], p12[[1]], type = "h", draw = F)
-plotPDF(comb_umap, name = "Plot-GRHL3-C2END-Motif-Genescore-UMAP.pdf",
-        ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
-comb_line <- ggAlignPlots(p11[[2]], p12[[2]], type = "h", draw = F)
-plotPDF(comb_line,name = "Plot-GRHL3-C2END-Motif-Genescore-Line.pdf",
-        ArchRProj = projNC, addDOC = FALSE, width = 8, height = 6)
-
-```
-
-Let's look at geneScores for some of the top motifs and compare them.
-
-```{r}
-motif_to_hi <- c("SOX8", "TWIST1","RFX2","ZIC1","OTX2","Dmbx1","YY2","RFX3","GRHL3","RFX1","RFX4")
-
-plotting_motifs2 <- getFeatures(projNC, select = paste(motif_to_hi, collapse="|"), useMatrix = "MotifMatrix")
-
-plotting_motifs_z2 <- paste0("z:",plotting_motifs2)
 
 
-motif_highlights <- plotEmbedding(projNC,
-                                     embedding = "UMAP",
-                                     colorBy = "MotifMatrix",
-                                     name = plotting_motifs_z2,
-                                     plotAs = "points",
-                                     sampleCells = NULL,
-                                     randomize = F,
-                                     rastr = F,
-                                     keepAxis = F,
-                                     threads = 1)
-
-plotting_genes2 <- getFeatures(projNC, select = paste(motif_to_hi, collapse="|"), useMatrix = "GeneScoreMatrix")
-
-gene_highlights <- plotEmbedding(projNC,
-                                     embedding = "UMAP",
-                                     colorBy = "GeneScoreMatrix",
-                                     name = plotting_genes2,
-                                     plotAs = "points",
-                                     sampleCells = NULL,
-                                     randomize = F,
-                                     rastr = F,
-                                     keepAxis = F,
-                                     threads = 1)
-
-
-combined <- cowplot::plot_grid(motif_highlights[[1]],gene_highlights[[9]],
-                               motif_highlights[[2]],gene_highlights[[5]],
-                               ncol = 2)
-
-combined2 <- cowplot::plot_grid(motif_highlights[[3]],gene_highlights[[1]],
-                               motif_highlights[[4]],gene_highlights[[8]],
-                               ncol = 2)
-
-combined3 <- cowplot::plot_grid(motif_highlights[[6]],gene_highlights[[2]],
-                               motif_highlights[[7]],gene_highlights[[7]],
-                               ncol = 2)
-
-combined4 <- cowplot::plot_grid(motif_highlights[[9]],gene_highlights[[10]],
-                                motif_highlights[[10]],gene_highlights[[3]],
-                               ncol = 2)
-
-combined5 <- cowplot::plot_grid(motif_highlights[[11]],gene_highlights[[6]],
-                               ncol = 2)
-
-plotPDF(combined, name = "Plot-Motif-GeneScore-UMAP-Projection-1.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-plotPDF(combined2, name = "Plot-Motif-GeneScore-UMAP-Projection-2.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-plotPDF(combined3, name = "Plot-Motif-GeneScore-UMAP-Projection-3.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-plotPDF(combined4, name = "Plot-Motif-GeneScore-UMAP-Projection-4.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-plotPDF(combined4, name = "Plot-Motif-GeneScore-UMAP-Projection-5.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-
-# How does the entire RFX family look?
-combined6 <- cowplot::plot_grid(motif_highlights[[3]],gene_highlights[[1]],
-                                motif_highlights[[2]],gene_highlights[[5]],
-                                motif_highlights[[9]],gene_highlights[[10]],
-                               ncol = 2)
-plotPDF(combined6, name = "Plot-Motif-GeneScore-UMAP-Projection-RFX.pdf", ArchRProj = projNC, addDOC = FALSE, width = 12, height = 10)
-```
 ## E 
 Integrative pseudo-time analyses.
 Let's find the best correlated Gene to Motif scores in an unbaised way.
 ```{r}
 # For each lineage, find the best correlated TF+Genes
 
-for(lineage in c("C1END","C2END","C5END","C7END","C9END","C10END")){
-    END_MM  <- getTrajectory(ArchRProj = projNC, name = lineage, useMatrix = "MotifMatrix", log2Norm = FALSE)
+for(lineage in c("C1END","C2END","C5END","C6END","C7END","C9END","C10END")){
+  END_MM  <- getTrajectory(ArchRProj = projNC, name = lineage, useMatrix = "MotifMatrix", log2Norm = FALSE)
   END_GSM <- getTrajectory(ArchRProj = projNC, name = lineage, useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
   END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.4)
 
@@ -1124,6 +1208,168 @@ for(lineage in c("C1END","C2END","C5END","C7END","C9END","C10END")){
   plotPDF(combined_cor_heatmap, name = paste0(lineage,"_TF-Gene_Correlation.pdf"), ArchRProj = projNC,
            addDOC = FALSE)
 }
+
+# This was a great initial pass. After a bunch of literature review, let's focus on the highlighted factors.
+
+# Mesenchyme focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C10END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C10END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.6, varCutOff2 = 0.6, maxDist = 500000)
+
+# Filter for TF's of interest 
+mes_tfs <- c("z:ZBTB18_192","z:TWIST1_741","z:TFAP2B_300","z:NR2F1_220","z:ETS1_251","z:FLI1_133")
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% mes_tfs,]
+
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+
+
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Mesenchyme_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+# Sensory Glia Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C2END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C2END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.6, varCutOff2 = 0.6, maxDist = 500000)
+
+# Filter for TF's of interest 
+sensory_glia_factors <- c("z:SIX1_405","z:DLX5_464","z:ZEB1_412","z:SNAI2_729","z:GATA2_390","z:ZIC5_561")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% sensory_glia_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Sensory_Glia_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+# Sensory Neuron Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C9END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C9END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.2, varCutOff2 = 0.2, maxDist = 500000)
+
+# Filter for TF's of interest 
+sensory_neuron_factors <- c("z:GATA5_605","z:FOXP1_688","z:SOX10_407","z:ZIC5_561","z:SIX1_405","z:FOXC2_333")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% sensory_neuron_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Sensory_Neurons_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+# Melanocyte Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C1END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C1END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.2, varCutOff2 = 0.2, maxDist = 500000)
+
+# Filter for TF's of interest 
+melano_factors <- c("z:NFYA_397","z:KLF11_493","z:SP1_632","z:YY2_744","z:ETV3_253","z:ATF2_640")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% melano_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Melanocyte_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+
+# Hindbrain Neuron Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C5END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C5END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.2, varCutOff2 = 0.2, maxDist = 500000)
+
+# Filter for TF's of interest 
+hindbrain_factors <- c("z:RFX4_287","z:MEIS1_261","z:SOX2_730","z:MEIS2_262","z:RFX2_283","z:RFX3_725")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% hindbrain_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Hindbrain_Neurons_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+# Midbrain Neuron Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C7END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C7END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.2, varCutOff2 = 0.2, maxDist = 500000)
+
+# Filter for TF's of interest 
+midbrain_factors <- c("z:OTX2_718","z:GATA4_691","z:GLI3_474","z:RFX4_287","z:PAX7_174","z:TBX6_545")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% midbrain_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Midbrain_Neurons_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
+# Somatosensory Neuron Focus
+END_MM  <- getTrajectory(ArchRProj = projNC, name = "C5END", useMatrix = "MotifMatrix", log2Norm = FALSE)
+END_GSM <- getTrajectory(ArchRProj = projNC, name = "C5END", useMatrix = "GeneScoreMatrix", log2Norm = FALSE)
+END_MM_corGSM_MM <- correlateTrajectories(END_MM, END_GSM, corCutOff = 0.1, varCutOff1 = 0.1, varCutOff2 = 0.1, maxDist = 500000)
+
+# Filter for TF's of interest 
+somato_factors <- c("z:RFX4_287","z:SOX2_730","z:OTX2_718","z:LHX5_500","z:MEIS1_261","z:BHLHE40_307")
+
+END_MM_corGSM_MM_filt <- END_MM_corGSM_MM[[1]][END_MM_corGSM_MM$correlatedMappings$name1 %in% somato_factors,]
+END_trajGSM2 <- END_GSM[END_MM_corGSM_MM_filt$name2, ]
+END_trajMM2 <- END_MM[END_MM_corGSM_MM_filt$name1, ]
+trajCombined <- END_trajGSM2
+assay(trajCombined, withDimnames = F) <- t(apply(assay(END_trajGSM2), 1, scale)) + t(apply(assay(END_trajMM2), 1, scale))
+combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
+rowOrder <- match(rownames(combinedMat), rownames(END_trajGSM2))
+ht1 <- plotTrajectoryHeatmap(END_trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
+ht2 <- plotTrajectoryHeatmap(END_trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+combined_cor_heatmap <- ht1 + ht2
+
+plotPDF(combined_cor_heatmap, name = paste0("Somatosensory_Neurons_TF-Gene_Correlation_Heatmap.pdf"), ArchRProj = projNC,
+           addDOC = FALSE)
+
 ```
 
 
@@ -1142,12 +1388,67 @@ markersGS <- getMarkerFeatures(
     useMatrix = "GeneScoreMatrix", 
     groupBy = "Clusters",
     bias = c("TSSEnrichment", "log10(nFrags)"),
-    normBy = "ReadsInPeaks",
-    testMethod = "wilcoxon")
+    #normBy = "ReadsInPeaks",
+    testMethod = "ttest")
 
+rownames(markersGS) <- markersGS@elementMetadata$name
+
+strong_GS_markers <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.05 & Log2FC >= 0.5"))
+
+# Focus Labels
+GSMarkerLabel <- c("TWIST1")
 # Heatmap of all differential enriched genes.
-plotMarkerHeatmap(seMarker = markersGS,
-                  cutOff = "FDR <= 0.01 & Log2FC >= 0.75")
+
+
+# Cell names along Neural 2 trajectory
+melano_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C1")]
+
+which(projNC$cellNames %in% melano_cells)
+
+# Order columns by pseudotime.
+melano_cells_df <- data.frame(Name = melano_cells,
+                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C1")])
+
+melano_cells_df <- melano_cells_df[order(melano_cells_df$Pseudotime),]
+
+ordered_melano <- as.matrix(motif_mat_impute[,melano_cells_df$Name])
+
+# Filter to only enriched TF's
+melano_Motifs <- getMarkerFeatures(
+    ArchRProj = projNC, 
+    useMatrix = "MotifMatrix", 
+    groupBy = "Clusters",
+    useGroups = c("C4","C1"),
+    bias = c("log10(nFrags)"),
+    maxCells = 750,
+    testMethod = "wilcoxon",
+    useSeqnames = "z", threads = 1)
+
+melano_motif_df <- as.data.frame(getMarkers(melano_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
+
+labels <- c("KLF14_235","SP1_632","NFYA_397","ELK3_248",
+            "ETV3_253","YY2_744","FOSL1..JUN.var.2_422",
+            "Creb5_326","ATF3_595","MITF_707","MLXIPL_157",
+            "EGR3_228","BHLHE41_122","TCFL5_635","TCF3_734")
+
+label_index <- which(unique(melano_motif_df$name) %in% labels)
+label_text <- stringr::str_split(unique(melano_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
+
+
+heatmap10 <- ComplexHeatmap::Heatmap(
+  matrix = ordered_neural3[unique(melano_motif_df$name),],
+  cluster_rows = T, cluster_columns = F, show_column_names = F,
+  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
+  column_title = "Cells ordered in Pseudotime: Melanocytes",
+  col = as.character(ArchRPalettes$blueYellow)) + 
+  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+
+unique(melano_motif_df$name)[row_order(heatmap8)]
+
+
+plotPDF(heatmap10, name = "Plot-.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
+
+heatmap10
 
 ```
 
@@ -1334,5 +1635,9 @@ plotting_enhancers <- c("1-173791114-173792531",
   
 plotting_motifs <- getFeatures(projNC, select = paste(plotting_enhancers, collapse="|"), useMatrix = "PeakMatrix")
 
+```
+# Let's interactively explore with the ArchRBrowser
+```{r}
+ArchRBrowser(projNC)
 ```
 
