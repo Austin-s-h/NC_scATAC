@@ -508,6 +508,22 @@ p9h <- plotTrajectory(projNC, trajectory = "C6END",
 plotPDF(p9h[[1]], name = "Plot-UMAP-Pseudotime-C6END.pdf", ArchRProj = projNC, addDOC = FALSE, width = 8, height = 8)
 
 p9h[[1]]
+
+
+# What is the average age per cluster? Does this match expectations?
+avg_age = data.frame(Cluster = c("C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"),
+              Avg_Pseudotime = c(mean(projNC[projNC$Cell_Identity == "C1_Melanocytes"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C2_Sensory_Glia"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C3_Int_Mesenchyme"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C4_Multipotent_NC"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C5_Hindbrain_Neurons"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C6_Somatosensory_Neurons"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C7_Midbrain_Neurons"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C8_Early_Mesenchyme"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C9_Sensory_Neurons"]$hour_adj_pseudotime),
+                                 mean(projNC[projNC$Cell_Identity == "C10_Late_Mesenchyme"]$hour_adj_pseudotime)))
+# How many cells for each lineage?
+summary(as.factor(projNC$Cell_Identity))
 ```
 
 ## B
@@ -1027,6 +1043,7 @@ plotPDF(heatmap8, name = "Plot-Somatosensory-Neurons-Motif-Pseudotime-Heatmap.pd
 
 heatmap8
 ```
+
 ```{r Melanocytes TF over pseudotime}
 # Cell names along Neural 2 trajectory
 melano_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C1")]
@@ -1185,10 +1202,247 @@ plotPDF(s10[[2]], name = "Plot-LHX5-MOTIF-Somatosensory-Neurons-Pseudotime-Line.
 Individual line plots of top genes in Motif and Genescore.
 
 
+
+# Figure 3
+Genescores
+
+## A
+Investigation of Genescores.
+
+TODO - Genescores using this new algorithm seems worse than previous implemention from Cicero. Perhaps I should compare Cicero vs ArchR Coaccessibility
+1.  It seems that ArchR gives 'cleaner' CoAccessibility.
+```{r}
+projNC_noC1 <- projNC[!projNC$Clusters == "C1"]
+
+# Genescores on non-imputed data.
+markersGS <- getMarkerFeatures(
+    ArchRProj = projNC_noC1, 
+    useMatrix = "GeneScoreMatrix", 
+    groupBy = "Clusters",
+    bias = c("TSSEnrichment", "log10(nFrags)"),
+    #normBy = "ReadsInPeaks",
+    testMethod = "ttest")
+
+strong_GS_markers <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.1 & Log2FC >= 1"))
+
+# Remove C1 overweight
+marker_list <- getMarkers(markersGS, cutOff = "FDR <= 0.1 & Log2FC >= 1")
+C1_markers <- paste0(marker_list$C1$seqnames,":", marker_list$C1$name)
+
+C1_markers_logical <- ifelse(stringr::str_split(stringr::str_split(C1_markers, pattern = ":", simplify = T)[,2], pattern = "_", simplify = T)[,1] == "NA",
+       FALSE, TRUE)
+
+C1_markers_filtered <- C1_markers[C1_markers_logical]
+
+# Focus Labels
+GSMarkerLabel <- c("TWIST1","PRRX2","SOX10","COL9A3","VEGFD","TMEM120A","SLC6A7","PRRX1","CRABP1",
+                   "S100A6","S100A4","CLDN9","DLX4","HOXB2","HOXB3","FAM181A","RAX","WNT3","WNT8B",
+                   "AQP2","GNRH1","OR14J1L57","CER1")
+label_index <- which(unique(strong_GS_markers$name) %in% GSMarkerLabel)
+label_text <- stringr::str_split(unique(strong_GS_markers$name)[label_index], pattern = "_", simplify = T)[,1]
+
+# Heatmap of all differentially enriched genes.
+genescore_mat <- getMatrixFromProject(projNC, useMatrix = "GeneScoreMatrix")
+genescore_mat@assays@data$GeneScoreMatrix@Dimnames[[1]] <- genescore_mat@elementMetadata$name
+
+genescore_mat_f <- as.matrix(genescore_mat@assays@data$GeneScoreMatrix)
+
+# Order columns by pseudotime.
+genescore_cells_df <- data.frame(Name = projNC$cellNames,
+                           Pseudotime = projNC$hour_adj_pseudotime)
+
+genescore_cells_df <- genescore_cells_df[order(genescore_cells_df$Pseudotime),]
+
+ordered_genescore <- as.matrix(genescore_mat_f[,genescore_cells_df$Name])
+
+rownames(ordered_genescore) %in% strong_GS_markers$name
+
+
+# heatmap10 <- ComplexHeatmap::Heatmap(
+#   matrix = ordered_genescore[1:100,1:100],
+#   cluster_rows = T, cluster_columns = F,
+#   show_column_names = F, show_row_names = F,
+#   use_raster = T, row_title = "chromVAR z-score",
+#   column_title = "Top GeneScores",
+#   col = as.character(ArchRPalettes$blueYellow)) + 
+#   rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
+# 
+# plotPDF(heatmap10, name = "GeneScore_Heatmap_Labeled.pdf",ArchRProj = projNC, width = 8, height = 6, addDOC = F)
+# 
+# heatmap10
+
+plotMarkerHeatmap(seMarker = markersGS, cutOff = "FDR <= 0.1 & Log2FC >= 1",
+                  nLabel = 5, plotLog2FC = T, grepExclude = "NA", transpose = T)
+
+```
+
+## B
+DiffTF-like correlation of TF expression to accessibility of peaks that contain their motif.
+
+We can use this to identify transcription factors of interest in each lineage.
+Interested in FOXD3 'biomodal' activity.
+
+```{r Across the entire dataset}
+seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
+
+rowData(seZ)$maxDelta <- lapply(seq_len(ncol(seZ)), function(x){
+  rowMaxs(assay(seZ) - assay(seZ)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM <- correlateMatrices(
+    ArchRProj = projNC,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM$maxDelta <- rowData(seZ)[match(corGSM_MM$MotifMatrix_name, rowData(seZ)$name), "maxDelta"]
+
+corGSM_MM <- corGSM_MM[order(abs(corGSM_MM$cor), decreasing = TRUE), ]
+corGSM_MM <- corGSM_MM[which(!duplicated(gsub("\\-.*","",corGSM_MM[,"MotifMatrix_name"]))), ]
+corGSM_MM$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM$TFRegulator[which(corGSM_MM$cor > 0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM$TFRegulator[which(corGSM_MM$cor < -0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM[corGSM_MM$TFRegulator=="Positive",1])
+
+corGSM_MM$label <- ifelse(corGSM_MM$TFRegulator %in% c("Positive","Negative"), corGSM_MM$GeneScoreMatrix_name, "")
+
+p13 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p13, name = "Plot-DiffTFlike-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p13
+
+write_csv(as.data.frame(corGSM_MM), "Figure_Exports/DiffTFlike-GeneScore-TF-Correlation-Table.csv")
+```
+
+```{r Mesencyhme vs Sensory Neurons}
+# Mesenchyme
+projNC_mes <- projNC[projNC$Cell_Identity %in% 
+                       c("C4_Multipotent_NC","C8_Early_Mesenchyme",
+                         "C3_Int_Mesenchyme","C10_Late_Mesenchyme"),]
+  
+
+seGroupMotif_mes <- getGroupSE(ArchRProj = projNC_mes, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ_mes <- seGroupMotif_mes[rowData(seGroupMotif_mes)$seqnames=="z",]
+
+rowData(seZ_mes)$maxDelta <- lapply(seq_len(ncol(seZ_mes)), function(x){
+  rowMaxs(assay(seZ_mes) - assay(seZ_mes)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM_mes <- correlateMatrices(
+    ArchRProj = projNC_mes,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM_mes$maxDelta <- rowData(seZ_mes)[match(corGSM_MM_mes$MotifMatrix_name, rowData(seZ_mes)$name), "maxDelta"]
+
+corGSM_MM_mes <- corGSM_MM_mes[order(abs(corGSM_MM_mes$cor), decreasing = TRUE), ]
+corGSM_MM_mes <- corGSM_MM_mes[which(!duplicated(gsub("\\-.*","",corGSM_MM_mes[,"MotifMatrix_name"]))), ]
+corGSM_MM_mes$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor > 0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor < -0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM_mes[corGSM_MM_mes$TFRegulator=="Positive",1])
+
+corGSM_MM_mes$label <- ifelse(corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), corGSM_MM_mes$GeneScoreMatrix_name, "")
+
+p14 <- ggplot(data.frame(corGSM_MM_mes), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM_mes$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p14, name = "Plot-Mesencyme-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p14
+
+projNC_senseNeuron <- projNC[projNC$Cell_Identity %in% 
+                       c("C4_Multipotent_NC","C9_Sensory_Neurons"),]
+  
+
+seGroupMotif_senseNeuron <- getGroupSE(ArchRProj = projNC_senseNeuron, useMatrix = "MotifMatrix", groupBy = "Clusters")
+seZ_senseNeuron <- seGroupMotif_senseNeuron[rowData(seGroupMotif_senseNeuron)$seqnames=="z",]
+
+rowData(seZ_senseNeuron)$maxDelta <- lapply(seq_len(ncol(seZ_senseNeuron)), function(x){
+  rowMaxs(assay(seZ_senseNeuron) - assay(seZ_senseNeuron)[,x])
+}) %>% Reduce("cbind", .) %>% rowMaxs
+
+corGSM_MM_senseNeuron <- correlateMatrices(
+    ArchRProj = projNC_senseNeuron,
+    useMatrix1 = "GeneScoreMatrix",
+    useMatrix2 = "MotifMatrix",
+    reducedDims = "IterativeLSI")
+
+corGSM_MM_senseNeuron$maxDelta <- rowData(seZ_senseNeuron)[match(corGSM_MM_senseNeuron$MotifMatrix_name, rowData(seZ_senseNeuron)$name), "maxDelta"]
+
+corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[order(abs(corGSM_MM_senseNeuron$cor), decreasing = TRUE), ]
+corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[which(!duplicated(gsub("\\-.*","",corGSM_MM_senseNeuron[,"MotifMatrix_name"]))), ]
+corGSM_MM_senseNeuron$TFRegulator <- "NO"
+
+# Positive
+corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor > 0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Positive"
+# Negative
+corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor < -0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Negative"
+
+sort(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator=="Positive",1])
+
+corGSM_MM_senseNeuron$label <- ifelse(corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), corGSM_MM_senseNeuron$GeneScoreMatrix_name, "")
+
+p15 <- ggplot(data.frame(corGSM_MM_senseNeuron), aes(cor, maxDelta, color = TFRegulator, label = label)) +
+  geom_point() + 
+  theme_ArchR() +
+  geom_vline(xintercept = 0, lty = "dashed") + 
+  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
+  xlab("Correlation To Gene Score") +
+  ylab("Max TF Motif Delta") +
+  scale_y_continuous(
+    expand = c(0,0), 
+    limits = c(0, max(corGSM_MM_senseNeuron$maxDelta)*1.05)
+  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
+
+plotPDF(p15, name = "Plot-SensoryNeuron-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
+
+p15
+
+# What are the largest differences between shared transcription factors?
+# First, see how many are classified differently.
+
+mes_summary <- as.data.frame(corGSM_MM_mes[corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
+
+sn_summary <- as.data.frame(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
+
+correlation_comparison <- merge(mes_summary, sn_summary, by = "label", all.x = TRUE, all.y = TRUE)
+```
+
 ## E 
 Integrative pseudo-time analyses.
 Let's find the best correlated Gene to Motif scores in an unbaised way.
-```{r}
+```{r Integration of Genescore and Motifs in pseudotime}
 # For each lineage, find the best correlated TF+Genes
 
 for(lineage in c("C1END","C2END","C5END","C6END","C7END","C9END","C10END")){
@@ -1373,246 +1627,6 @@ plotPDF(combined_cor_heatmap, name = paste0("Somatosensory_Neurons_TF-Gene_Corre
 ```
 
 
-# Figure 3
-Genescores
-
-## A
-Investigation of Genescores.
-
-TODO - Genescores using this new algorithm seems worse than previous implemention from Cicero. Perhaps I should compare Cicero vs ArchR Coaccessibility
-1.  It seems that ArchR gives 'cleaner' CoAccessibility.
-```{r}
-# Genescores on non-imputed data.
-markersGS <- getMarkerFeatures(
-    ArchRProj = projNC, 
-    useMatrix = "GeneScoreMatrix", 
-    groupBy = "Clusters",
-    bias = c("TSSEnrichment", "log10(nFrags)"),
-    #normBy = "ReadsInPeaks",
-    testMethod = "ttest")
-
-rownames(markersGS) <- markersGS@elementMetadata$name
-
-strong_GS_markers <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.05 & Log2FC >= 0.5"))
-
-# Focus Labels
-GSMarkerLabel <- c("TWIST1")
-# Heatmap of all differential enriched genes.
-
-
-# Cell names along Neural 2 trajectory
-melano_cells <- projNC$cellNames[projNC$Clusters %in% c("C4","C1")]
-
-which(projNC$cellNames %in% melano_cells)
-
-# Order columns by pseudotime.
-melano_cells_df <- data.frame(Name = melano_cells,
-                           Pseudotime = projNC$hour_adj_pseudotime[projNC$Clusters %in%  c("C4","C1")])
-
-melano_cells_df <- melano_cells_df[order(melano_cells_df$Pseudotime),]
-
-ordered_melano <- as.matrix(motif_mat_impute[,melano_cells_df$Name])
-
-# Filter to only enriched TF's
-melano_Motifs <- getMarkerFeatures(
-    ArchRProj = projNC, 
-    useMatrix = "MotifMatrix", 
-    groupBy = "Clusters",
-    useGroups = c("C4","C1"),
-    bias = c("log10(nFrags)"),
-    maxCells = 750,
-    testMethod = "wilcoxon",
-    useSeqnames = "z", threads = 1)
-
-melano_motif_df <- as.data.frame(getMarkers(melano_Motifs, cutOff = "FDR <= 1e-15 & MeanDiff > 1.5"))
-
-labels <- c("KLF14_235","SP1_632","NFYA_397","ELK3_248",
-            "ETV3_253","YY2_744","FOSL1..JUN.var.2_422",
-            "Creb5_326","ATF3_595","MITF_707","MLXIPL_157",
-            "EGR3_228","BHLHE41_122","TCFL5_635","TCF3_734")
-
-label_index <- which(unique(melano_motif_df$name) %in% labels)
-label_text <- stringr::str_split(unique(melano_motif_df$name)[label_index], pattern = "_", simplify = T)[,1]
-
-
-heatmap10 <- ComplexHeatmap::Heatmap(
-  matrix = ordered_neural3[unique(melano_motif_df$name),],
-  cluster_rows = T, cluster_columns = F, show_column_names = F,
-  show_row_names = F, use_raster = F, row_title = "chromVAR z-score",
-  column_title = "Cells ordered in Pseudotime: Melanocytes",
-  col = as.character(ArchRPalettes$blueYellow)) + 
-  rowAnnotation(names = anno_mark(at = label_index, labels = label_text))
-
-unique(melano_motif_df$name)[row_order(heatmap8)]
-
-
-plotPDF(heatmap10, name = "Plot-.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 5)
-
-heatmap10
-
-```
-
-## B
-DiffTF-like correlation of TF expression to accessibility of peaks that contain their motif.
-
-We can use this to identify transcription factors of interest in each lineage.
-Interested in FOXD3 'biomodal' activity.
-
-```{r Across the entire dataset}
-seGroupMotif <- getGroupSE(ArchRProj = projNC, useMatrix = "MotifMatrix", groupBy = "Clusters")
-seZ <- seGroupMotif[rowData(seGroupMotif)$seqnames=="z",]
-
-rowData(seZ)$maxDelta <- lapply(seq_len(ncol(seZ)), function(x){
-  rowMaxs(assay(seZ) - assay(seZ)[,x])
-}) %>% Reduce("cbind", .) %>% rowMaxs
-
-corGSM_MM <- correlateMatrices(
-    ArchRProj = projNC,
-    useMatrix1 = "GeneScoreMatrix",
-    useMatrix2 = "MotifMatrix",
-    reducedDims = "IterativeLSI")
-
-corGSM_MM$maxDelta <- rowData(seZ)[match(corGSM_MM$MotifMatrix_name, rowData(seZ)$name), "maxDelta"]
-
-corGSM_MM <- corGSM_MM[order(abs(corGSM_MM$cor), decreasing = TRUE), ]
-corGSM_MM <- corGSM_MM[which(!duplicated(gsub("\\-.*","",corGSM_MM[,"MotifMatrix_name"]))), ]
-corGSM_MM$TFRegulator <- "NO"
-
-# Positive
-corGSM_MM$TFRegulator[which(corGSM_MM$cor > 0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Positive"
-# Negative
-corGSM_MM$TFRegulator[which(corGSM_MM$cor < -0.3 & corGSM_MM$padj < 0.1 & corGSM_MM$maxDelta > quantile(corGSM_MM$maxDelta, 0.7))] <- "Negative"
-
-sort(corGSM_MM[corGSM_MM$TFRegulator=="Positive",1])
-
-corGSM_MM$label <- ifelse(corGSM_MM$TFRegulator %in% c("Positive","Negative"), corGSM_MM$GeneScoreMatrix_name, "")
-
-p13 <- ggplot(data.frame(corGSM_MM), aes(cor, maxDelta, color = TFRegulator, label = label)) +
-  geom_point() + 
-  theme_ArchR() +
-  geom_vline(xintercept = 0, lty = "dashed") + 
-  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
-  xlab("Correlation To Gene Score") +
-  ylab("Max TF Motif Delta") +
-  scale_y_continuous(
-    expand = c(0,0), 
-    limits = c(0, max(corGSM_MM$maxDelta)*1.05)
-  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
-
-plotPDF(p13, name = "Plot-DiffTFlike-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
-
-p13
-```
-
-```{r Mesencyhme vs Sensory Neurons}
-# Mesenchyme
-projNC_mes <- projNC[projNC$Cell_Identity %in% 
-                       c("C4_Multipotent_NC","C8_Early_Mesenchyme",
-                         "C3_Int_Mesenchyme","C10_Late_Mesenchyme"),]
-  
-
-seGroupMotif_mes <- getGroupSE(ArchRProj = projNC_mes, useMatrix = "MotifMatrix", groupBy = "Clusters")
-seZ_mes <- seGroupMotif_mes[rowData(seGroupMotif_mes)$seqnames=="z",]
-
-rowData(seZ_mes)$maxDelta <- lapply(seq_len(ncol(seZ_mes)), function(x){
-  rowMaxs(assay(seZ_mes) - assay(seZ_mes)[,x])
-}) %>% Reduce("cbind", .) %>% rowMaxs
-
-corGSM_MM_mes <- correlateMatrices(
-    ArchRProj = projNC_mes,
-    useMatrix1 = "GeneScoreMatrix",
-    useMatrix2 = "MotifMatrix",
-    reducedDims = "IterativeLSI")
-
-corGSM_MM_mes$maxDelta <- rowData(seZ_mes)[match(corGSM_MM_mes$MotifMatrix_name, rowData(seZ_mes)$name), "maxDelta"]
-
-corGSM_MM_mes <- corGSM_MM_mes[order(abs(corGSM_MM_mes$cor), decreasing = TRUE), ]
-corGSM_MM_mes <- corGSM_MM_mes[which(!duplicated(gsub("\\-.*","",corGSM_MM_mes[,"MotifMatrix_name"]))), ]
-corGSM_MM_mes$TFRegulator <- "NO"
-
-# Positive
-corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor > 0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Positive"
-# Negative
-corGSM_MM_mes$TFRegulator[which(corGSM_MM_mes$cor < -0.3 & corGSM_MM_mes$padj < 0.1 & corGSM_MM_mes$maxDelta > quantile(corGSM_MM_mes$maxDelta, 0.7))] <- "Negative"
-
-sort(corGSM_MM_mes[corGSM_MM_mes$TFRegulator=="Positive",1])
-
-corGSM_MM_mes$label <- ifelse(corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), corGSM_MM_mes$GeneScoreMatrix_name, "")
-
-p14 <- ggplot(data.frame(corGSM_MM_mes), aes(cor, maxDelta, color = TFRegulator, label = label)) +
-  geom_point() + 
-  theme_ArchR() +
-  geom_vline(xintercept = 0, lty = "dashed") + 
-  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
-  xlab("Correlation To Gene Score") +
-  ylab("Max TF Motif Delta") +
-  scale_y_continuous(
-    expand = c(0,0), 
-    limits = c(0, max(corGSM_MM_mes$maxDelta)*1.05)
-  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
-
-plotPDF(p14, name = "Plot-Mesencyme-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
-
-p14
-
-projNC_senseNeuron <- projNC[projNC$Cell_Identity %in% 
-                       c("C4_Multipotent_NC","C9_Sensory_Neurons"),]
-  
-
-seGroupMotif_senseNeuron <- getGroupSE(ArchRProj = projNC_senseNeuron, useMatrix = "MotifMatrix", groupBy = "Clusters")
-seZ_senseNeuron <- seGroupMotif_senseNeuron[rowData(seGroupMotif_senseNeuron)$seqnames=="z",]
-
-rowData(seZ_senseNeuron)$maxDelta <- lapply(seq_len(ncol(seZ_senseNeuron)), function(x){
-  rowMaxs(assay(seZ_senseNeuron) - assay(seZ_senseNeuron)[,x])
-}) %>% Reduce("cbind", .) %>% rowMaxs
-
-corGSM_MM_senseNeuron <- correlateMatrices(
-    ArchRProj = projNC_senseNeuron,
-    useMatrix1 = "GeneScoreMatrix",
-    useMatrix2 = "MotifMatrix",
-    reducedDims = "IterativeLSI")
-
-corGSM_MM_senseNeuron$maxDelta <- rowData(seZ_senseNeuron)[match(corGSM_MM_senseNeuron$MotifMatrix_name, rowData(seZ_senseNeuron)$name), "maxDelta"]
-
-corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[order(abs(corGSM_MM_senseNeuron$cor), decreasing = TRUE), ]
-corGSM_MM_senseNeuron <- corGSM_MM_senseNeuron[which(!duplicated(gsub("\\-.*","",corGSM_MM_senseNeuron[,"MotifMatrix_name"]))), ]
-corGSM_MM_senseNeuron$TFRegulator <- "NO"
-
-# Positive
-corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor > 0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Positive"
-# Negative
-corGSM_MM_senseNeuron$TFRegulator[which(corGSM_MM_senseNeuron$cor < -0.3 & corGSM_MM_senseNeuron$padj < 0.1 & corGSM_MM_senseNeuron$maxDelta > quantile(corGSM_MM_senseNeuron$maxDelta, 0.7))] <- "Negative"
-
-sort(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator=="Positive",1])
-
-corGSM_MM_senseNeuron$label <- ifelse(corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), corGSM_MM_senseNeuron$GeneScoreMatrix_name, "")
-
-p15 <- ggplot(data.frame(corGSM_MM_senseNeuron), aes(cor, maxDelta, color = TFRegulator, label = label)) +
-  geom_point() + 
-  theme_ArchR() +
-  geom_vline(xintercept = 0, lty = "dashed") + 
-  scale_color_manual(values = c("NO"="darkgrey", "Positive"="firebrick3", "Negative"="blue")) +
-  xlab("Correlation To Gene Score") +
-  ylab("Max TF Motif Delta") +
-  scale_y_continuous(
-    expand = c(0,0), 
-    limits = c(0, max(corGSM_MM_senseNeuron$maxDelta)*1.05)
-  ) + geom_label_repel(max.overlaps = 20, box.padding = 0.25)
-
-plotPDF(p15, name = "Plot-SensoryNeuron-GeneScore-TF-Correlation.pdf", ArchRProj = projNC, addDOC = FALSE, width = 6, height = 7)
-
-p15
-
-# What are the largest differences between shared transcription factors?
-# First, see how many are classified differently.
-
-mes_summary <- as.data.frame(corGSM_MM_mes[corGSM_MM_mes$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
-
-sn_summary <- as.data.frame(corGSM_MM_senseNeuron[corGSM_MM_senseNeuron$TFRegulator %in% c("Positive","Negative"), c("cor","label")])
-
-correlation_comparison <- merge(mes_summary, sn_summary, by = "label", all.x = TRUE, all.y = TRUE)
-```
-
 ## In-vivo enhancer images
 ```{r plot peak accessibility}
 # 2−42661574−42662731
@@ -1640,4 +1654,5 @@ plotting_motifs <- getFeatures(projNC, select = paste(plotting_enhancers, collap
 ```{r}
 ArchRBrowser(projNC)
 ```
+
 

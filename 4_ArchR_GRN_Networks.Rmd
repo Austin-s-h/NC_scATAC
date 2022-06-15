@@ -32,6 +32,7 @@ library(org.Gg.eg.db)
 library(qdapTools)
 library(stringr)
 library(readr)
+library(qdapTools)
 
 addArchRThreads(threads = 62) 
 set.seed(1)
@@ -40,15 +41,219 @@ projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesi
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 103)
 arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
 ensembl2symbol <- as.data.frame(mcols(arch_gg6_genes$genes))
+
+ensembl2symbol$chr <- as.character(seqnames(arch_gg6_genes$genes))
 ```
 
 Let's explore the CoAccessibility object. Specifically, we are looking for a way to link peaks to genes. I think the easiest way is just to check if either of the peaks overlap the gene's promoter region (-5kb to +1kb).
 
-```{r}
+```{r coAccess by lineage}
+# Make a GRange object with promoters.
+galGal6_prom <- trim(promoters(genes(TxDb_galGal6), upstream = 5000, downstream = 1000))
+galGal6_prom$gene_symbol <- lookup(terms = galGal6_prom$gene_id, key.match = ensembl2symbol)
 peakset <- getPeakSet(projNC)
 All_Peak_Regions <- as.data.frame(peakset)
 All_Peak_Regions$idx <- as.character(All_Peak_Regions$idx)
 All_Peak_Regions$PeakID <- paste0(All_Peak_Regions$seqnames, "_", All_Peak_Regions$start, "_", All_Peak_Regions$end)
+
+getLineageCoAccessibility <- function(ArchRProj = projNC,
+                                      cells = "",
+                                      corCutOff = 0.3,
+                                      resolution = 1){
+  # Subset ArchR project to just that lineage
+  lineage_Proj <- addCoAccessibility(ArchRProj = ArchRProj,
+                                     reducedDims = "IterativeLSI",
+                                     cellsToUse = cells, 
+                                     maxDist = 5e5,
+                                     threads = 62,
+                                     seed = "05010501")
+  # Get coAccessible elements
+  cA <- as.data.frame(getCoAccessibility(
+      ArchRProj = lineage_Proj,
+      corCutOff = 0.3,
+      resolution = 1,
+      returnLoops = F))
+  # Annotate with PeakID
+  b <- All_Peak_Regions[,c("idx","PeakID")]
+  b <- b[cA$queryHits,]
+  cA$Peak1 <- b$PeakID
+  c <- All_Peak_Regions[,c("idx","PeakID")]
+  c <- c[cA$subjectHits,]
+  cA$Peak2 <- c$PeakID
+  
+  # Which coAccessible elements have a peak in a promoter?
+  Peak1_coords <- str_split(cA$Peak1, pattern = "_", n = 3, simplify = T)
+  Peak1_ovl <- makeGRangesFromDataFrame(df = data.frame(chr = Peak1_coords[,1],
+                                                      start = Peak1_coords[,2],
+                                                      end = Peak1_coords[,3]))
+  hits <- findOverlaps(Peak1_ovl, galGal6_prom)
+
+  Peak1_ovl$gene_id <- ifelse(Peak1_ovl %in% Peak1_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
+
+
+  Peak2_coords <- str_split(cA$Peak2, pattern = "_", n = 3, simplify = T)
+  Peak2_ovl <- makeGRangesFromDataFrame(df = data.frame(chr = Peak2_coords[,1],
+                                                      start = Peak2_coords[,2],
+                                                      end = Peak2_coords[,3]))
+  hits2 <- findOverlaps(Peak2_ovl, galGal6_prom)
+
+  Peak2_ovl$gene_id <- ifelse(Peak2_ovl %in% Peak2_ovl[hits@from], galGal6_prom[hits@to]$gene_id, NA)
+
+  cA$Overlap1 <- Peak1_ovl$gene_id
+  cA$Overlap2 <- Peak2_ovl$gene_id
+
+  # Annotate as Distal-Distal, Distal-Prom, or Prom-Prom
+  cA$Overlap_Type <- ifelse(is.na(cA$Overlap1) & is.na(cA$Overlap2), "Distal-Distal",
+                          ifelse(!is.na(cA$Overlap1) & !is.na(cA$Overlap2), "Promoter-Promoter",
+                                 "Distal-Promoter"))
+
+  cA$Symbol1 <-  qdapTools::lookup(cA$Overlap1, ensembl2symbol)
+  cA$Symbol2 <-  qdapTools::lookup(cA$Overlap2, ensembl2symbol)
+  
+  return(cA)
+}
+
+CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.3){
+  # A function to select identify all of the peaks that are associated with a certain gene given a correlation cutoff.
+  # Inputs
+  # coaccess - A formatted coaccessability report with at least Peak1, Peak2, Symbol1, Symbol2, and coaccessibility measurements
+  # goi - Gene of Interest, an ENSEMBL ID of a gene you wish to find peaks associated with.
+  # cutoff - a numerical variable to filter corrleation values.
+  
+  # Find the ensembl ID of the requested overlap
+  ensembl <- lookup(goi, ensembl2symbol[,c(2,1)])
+  chr <- lookup(goi, ensembl2symbol[,c(2,3)])
+  # Subset the coaccess dataset for Symbol overlaps
+  coaccess <- coaccess[coaccess$Symbol1 %in% goi | coaccess$Symbol2 %in% goi, ]
+  
+  # Subset the coaccess dataset for only the chromosome that the gene is on.
+  coaccess <- coaccess[str_split(coaccess$Overlap1, pattern = "_", simplify = T)[,1] == chr & 
+                         str_split(coaccess$Overlap2, pattern = "_", simplify = T)[,1] == chr,]
+  coaccess <- coaccess[max(coaccess[3:9], na.rm = T) >= cutoff,]
+
+  return(coaccess)
+}
+
+
+```
+
+```{r Generate CoAccessibility per lineage}
+# C2 END (sensory Glia CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C2END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C2END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C2END_cA_filt <- C2END_cA[C2END_cA$correlation > 0.75,]
+write_csv(C2END_cA_filt, file = "Figure_Exports/C2END_cA_500Kb_0.75.csv")
+
+# C9 END (sensory neuron CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C9END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C9END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C9END_cA_filt <- C9END_cA[C9END_cA$correlation > 0.75,]
+write_csv(C9END_cA_filt, file = "Figure_Exports/C9END_cA_500Kb_0.75.csv")
+
+# C1 END (Melanocyte CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C1END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C1END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C1END_cA_filt <- C1END_cA[C1END_cA$correlation > 0.75,]
+write_csv(C1END_cA_filt, file = "Figure_Exports/C1END_cA_500Kb_0.75.csv")
+
+# C10 END (Mesenchyme CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C10END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C10END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C10END_cA_filt <- C10END_cA[C10END_cA$correlation > 0.75,]
+write_csv(C10END_cA_filt, file = "Figure_Exports/C10END_cA_500Kb_0.75.csv")
+
+# C5 END (Hindbrain CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C5END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C5END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C5END_cA_filt <- C5END_cA[C5END_cA$correlation > 0.75,]
+write_csv(C5END_cA_filt, file = "Figure_Exports/C5END_cA_500Kb_0.75.csv")
+
+# C6 END (Somatosensory CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C6END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C6END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C6END_cA_filt <- C6END_cA[C6END_cA$correlation > 0.75,]
+write_csv(C6END_cA_filt, file = "Figure_Exports/C6END_cA_500Kb_0.75.csv")
+
+# C7 END (Somatosensory CoAccessibility)
+lineage_cells <- rownames(projNC@cellColData)[projNC$C7END >0]
+lineage_cells <- lineage_cells[!is.na(lineage_cells)]
+C7END_cA <- getLineageCoAccessibility(ArchRProj = projNC, cells = lineage_cells)
+C7END_cA_filt <- C7END_cA[C7END_cA$correlation > 0.75,]
+write_csv(C7END_cA_filt, file = "Figure_Exports/C7END_cA_500Kb_0.75.csv")
+
+# Summary stats of lineage-level CoAccessibility
+C2END_cA$Peak1_and_Peak2 <- paste0(C2END_cA$Peak1,"-",C2END_cA$Peak2)
+C9END_cA$Peak1_and_Peak2 <- paste0(C9END_cA$Peak1,"-",C9END_cA$Peak2)
+C1END_cA$Peak1_and_Peak2 <- paste0(C1END_cA$Peak1,"-",C1END_cA$Peak2)
+C10END_cA$Peak1_and_Peak2 <- paste0(C10END_cA$Peak1,"-",C10END_cA$Peak2)
+C5END_cA$Peak1_and_Peak2 <- paste0(C5END_cA$Peak1,"-",C5END_cA$Peak2)
+C6END_cA$Peak1_and_Peak2 <- paste0(C6END_cA$Peak1,"-",C6END_cA$Peak2)
+C7END_cA$Peak1_and_Peak2 <- paste0(C7END_cA$Peak1,"-",C7END_cA$Peak2)
+
+C2END_cA$Symbol1_and_Symbol2 <- paste0(C2END_cA$Symbol1,"-",C2END_cA$Symbol2)
+C9END_cA$Symbol1_and_Symbol2 <- paste0(C9END_cA$Symbol1,"-",C9END_cA$Symbol2)
+C1END_cA$Symbol1_and_Symbol2 <- paste0(C1END_cA$Symbol1,"-",C1END_cA$Symbol2)
+C10END_cA$Symbol1_and_Symbol2 <- paste0(C10END_cA$Symbol1,"-",C10END_cA$Symbol2)
+C5END_cA$Symbol1_and_Symbol2 <- paste0(C5END_cA$Symbol1,"-",C5END_cA$Symbol2)
+C6END_cA$Symbol1_and_Symbol2 <- paste0(C6END_cA$Symbol1,"-",C6END_cA$Symbol2)
+C7END_cA$Symbol1_and_Symbol2 <- paste0(C7END_cA$Symbol1,"-",C7END_cA$Symbol2)
+
+# Adding annotations
+All_Peak_Combinations_anno = data.frame(
+  All_Peak_Combinations = c(
+  C2END_cA$Peak1_and_Peak2,C9END_cA$Peak1_and_Peak2,C1END_cA$Peak1_and_Peak2,
+  C10END_cA$Peak1_and_Peak2,C5END_cA$Peak1_and_Peak2,C6END_cA$Peak1_and_Peak2,
+  C7END_cA$Peak1_and_Peak2),
+  Symbol1and2 = c(
+  C2END_cA$Symbol1_and_Symbol2,C9END_cA$Symbol1_and_Symbol2,C1END_cA$Symbol1_and_Symbol2,
+  C10END_cA$Symbol1_and_Symbol2,C5END_cA$Symbol1_and_Symbol2,C6END_cA$Symbol1_and_Symbol2,
+  C7END_cA$Symbol1_and_Symbol2))
+
+head(All_Peak_Combinations_anno)
+
+All_Peak_Combinations_anno$C2END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C2END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C9END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C9END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C1END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C1END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C10END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C10END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C5END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C5END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C6END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C6END_cA[,c("Peak1_and_Peak2","correlation")])
+All_Peak_Combinations_anno$C7END_Correlation <- lookup(All_Peak_Combinations_anno$All_Peak_Combinations, C7END_cA[,c("Peak1_and_Peak2","correlation")])
+
+merged_CoAccess_matrix <- as.matrix(All_Peak_Combinations_anno[,3:9])
+All_Peak_Combinations_anno$Lineage_Variability <- MatrixGenerics::rowVars(merged_CoAccess_matrix, na.rm = T)
+
+All_Peak_Combinations_anno_ordered <- All_Peak_Combinations_anno[order(All_Peak_Combinations_anno$Lineage_Variability, decreasing = T),]
+
+write_csv(All_Peak_Combinations_anno_ordered, "Figure_Exports/CoAccessibility_Lineage_Summary.csv")
+quantile(All_Peak_Combinations_anno_ordered$Lineage_Variability, prob=c(.75,.9, .95), na.rm = T)
+
+# Top 5% variable peaks
+All_Peak_Combinations_anno_filt <- All_Peak_Combinations_anno_ordered[All_Peak_Combinations_anno_ordered$Lineage_Variability > 0.03067606,]
+
+write_csv(All_Peak_Combinations_anno_filt, "Figure_Exports/CoAccessibility_Lineage_top0.05-variable_Summary.csv")
+```
+
+## Summary of different CoAccessibility in lineages
+```{r}
+All_Peak_Combinations_anno_filt <- read_csv("Figure_Exports/CoAccessibility_Lineage_top0.05-variable_Summary.csv")
+
+All_Peak_Combinations_anno_filt$Overlap1 <- str_split(All_Peak_Combinations_anno_filt$All_Peak_Combinations, pattern = "-", simplify = T)[,1]
+All_Peak_Combinations_anno_filt$Overlap2 <- str_split(All_Peak_Combinations_anno_filt$All_Peak_Combinations, pattern = "-", simplify = T)[,2]
+
+All_Peak_Combinations_anno_filt$Symbol1 <- str_split(All_Peak_Combinations_anno_filt$Symbol1and2, pattern = "-", simplify = T)[,1]
+All_Peak_Combinations_anno_filt$Symbol2 <- str_split(All_Peak_Combinations_anno_filt$Symbol1and2, pattern = "-", simplify = T)[,2]
+
+CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("SOX10"), cutoff = 0.1)
+```
+
+
+```{r}
 
 # Get coAccessible elements
 cA <- as.data.frame(getCoAccessibility(
@@ -97,20 +302,7 @@ cA$Overlap_Type <- ifelse(is.na(cA$Overlap1) & is.na(cA$Overlap2), "Distal-Dista
 cA$Symbol1 <-  qdapTools::lookup(cA$Overlap1, ensembl2symbol)
 cA$Symbol2 <-  qdapTools::lookup(cA$Overlap2, ensembl2symbol)
 
-CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.5){
-  # A function to select identify all of the peaks that are associated with a certain gene given a correlation cutoff.
-  # Inputs
-  # coaccess - A formatted coaccessability report with at least Peak1, Peak2, Overlap1, Overlap2, and correlation.
-  # goi - Gene of Interest, an ENSEMBL ID of a gene you wish to find peaks associated with.
-  # cutoff - a numerical variable to filter corrleation values.
-  chr <- coaccess[which(coaccess$Overlap1 == goi)[1],"seqnames"]
-  sub <- coaccess[c(which(coaccess$Overlap1 == goi),
-     which(coaccess$Overlap2 == goi)),]
-  sub <- sub[sub$correlation >= cutoff,]
-  # Remove things not on the same chromosome.
-  sub <- sub[sub$seqnames == chr,]
-  return(sub)
-}
+
 
 sub_cA <- CorrelatedToGene(cA, goi = "ENSGALG00000051297", cutoff = 0.3)
 
