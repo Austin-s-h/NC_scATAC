@@ -1627,32 +1627,4 @@ plotPDF(combined_cor_heatmap, name = paste0("Somatosensory_Neurons_TF-Gene_Corre
 ```
 
 
-## In-vivo enhancer images
-```{r plot peak accessibility}
-# 2−42661574−42662731
-# 27−5656060−5657658
-# 1−173791046−173792605
-prev_locations <- makeGRangesFromDataFrame(data.frame(chr = c("2","27","1"),
-                                                      start = c("42661574","5656060","173791046"),
-                                                      end = c("42662731","5657658","173792605")))
-
-atac_peaks.gr <- getPeakSet(projNC)
-
-plotting_enhancers.gr <- atac_peaks.gr[atac_peaks.gr %over% prev_locations]
-
-temp <- getMarkerFeatures(projNC, "PeakMatrix")
-
-plotting_enhancers <- c("1-173791114-173792531",
-                        "2-42661783-42662544",
-                        "27-5656219-5656425",
-                        "27-5656717-5657554")
-  
-plotting_motifs <- getFeatures(projNC, select = paste(plotting_enhancers, collapse="|"), useMatrix = "PeakMatrix")
-
-```
-# Let's interactively explore with the ArchRBrowser
-```{r}
-ArchRBrowser(projNC)
-```
-
 

@@ -128,6 +128,18 @@ markersPeaks_C1 <- getMarkerFeatures(
     bias = c("TSSEnrichment", "log10(nFrags)"),
     testMethod = "wilcoxon", useGroups = "C1")
 
+getMarkers(markersPeaks_C1)
+
+p <- plotEmbedding(
+    ArchRProj = projNC, 
+    colorBy = "PeakMatrix", 
+    name = getMarkers(markersPeaks_C1), 
+    embedding = "UMAP",
+    quantCut = c(0.01, 0.95),
+    imputeWeights = NULL
+)
+
+
 GS_df <- as.data.frame(getMarkers(markersGS, cutOff = "FDR <= 0.01 & Log2FC >= 1"))
 write.csv(GS_df, file = "temp_GeneScores.csv")
 
@@ -149,7 +161,7 @@ grid::grid.draw(p1$DLX4)
 
 # Plotting some motifs
 ```{r}
-motifs <- c("BHLHE22")
+motifs <- c("FOXI1")
 
 grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"
