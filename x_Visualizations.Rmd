@@ -1272,8 +1272,10 @@ rownames(ordered_genescore) %in% strong_GS_markers$name
 # heatmap10
 
 plotMarkerHeatmap(seMarker = markersGS, cutOff = "FDR <= 0.1 & Log2FC >= 1",
-                  nLabel = 5, plotLog2FC = T, grepExclude = "NA", transpose = T)
+                  nLabel = 5, plotLog2FC = T, grepExclude = "NA", transpose = T,
+                  pal = ArchRPalettes$horizonExtra)
 
+plotPDF(genescore_heatmap, name = "GeneScore_Heatmap_Labeled.pdf", ArchRProj = projNC, width = 8, height = 6, addDOC = F)
 ```
 
 ## B

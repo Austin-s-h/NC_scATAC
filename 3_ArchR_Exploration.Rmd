@@ -161,7 +161,7 @@ grid::grid.draw(p1$DLX4)
 
 # Plotting some motifs
 ```{r}
-motifs <- c("FOXI1")
+motifs <- c("SOX10","PAX3")
 
 grey_red <- ArchRPalettes$whiteRed
 grey_red[1] <- "grey"

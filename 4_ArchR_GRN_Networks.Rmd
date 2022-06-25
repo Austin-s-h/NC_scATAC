@@ -141,14 +141,23 @@ CorrelatedToGene <- function(coaccess = cA, goi = "", cutoff = 0.3){
   ensembl <- lookup(goi, ensembl2symbol[,c(2,1)])
   chr <- lookup(goi, ensembl2symbol[,c(2,3)])
   # Subset the coaccess dataset for Symbol overlaps
-  coaccess <- coaccess[coaccess$Symbol1 %in% goi | coaccess$Symbol2 %in% goi, ]
+  coaccess1 <- coaccess[goi %in% coaccess$Symbol1,]
+   # Subset the coaccess dataset for only the chromosome that the gene is on.
+  coaccess1 <- coaccess1[str_split(coaccess1$Overlap1, pattern = "_", simplify = T)[,1] == chr & 
+                         str_split(coaccess1$Overlap2, pattern = "_", simplify = T)[,1] == chr,]
+  # Filter out to correlation cutoff
+  coaccess1 <- coaccess1[max(coaccess1[3:9], na.rm = T) >= cutoff,]
+  print(length(coaccess1$Symbol1and2))
+  coaccess2 <- coaccess[goi %in% coaccess$Symbol2,]
   
-  # Subset the coaccess dataset for only the chromosome that the gene is on.
-  coaccess <- coaccess[str_split(coaccess$Overlap1, pattern = "_", simplify = T)[,1] == chr & 
-                         str_split(coaccess$Overlap2, pattern = "_", simplify = T)[,1] == chr,]
-  coaccess <- coaccess[max(coaccess[3:9], na.rm = T) >= cutoff,]
-
-  return(coaccess)
+  coaccess2 <- coaccess2[str_split(coaccess2$Overlap1, pattern = "_", simplify = T)[,1] == chr & 
+                         str_split(coaccess2$Overlap2, pattern = "_", simplify = T)[,1] == chr,]
+  
+  # Filter out to correlation cutoff
+  coaccess2 <- coaccess2[max(coaccess2[3:9], na.rm = T) >= cutoff,]
+  print(length(coaccess2$Symbol1and2))
+  
+  #return(coaccess_comb)
 }
 
 
@@ -276,7 +285,7 @@ All_Peak_Combinations_anno_filt$Overlap2_end <- str_split(All_Peak_Combinations_
 
 
 Sox10_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("SOX10"), cutoff = 0.1)
-# Replace NA with 0.
+# Replace NA with 0.001
 Sox10_Coaccess[is.na(Sox10_Coaccess)] <- 0.001
 
 # standard barplots of a pair in different lineages.
@@ -400,6 +409,55 @@ en_plot <- plotEmbedding(
 
 plotPDF(en_plot, ArchRProj = projNC, name = "C7_Midbrain_Neurons_M8B_Enhancer_UMAP.pdf", addDOC = FALSE, width = 5, height = 5)
 ```
+
+## Investigation of GRN in mesenchyme lineage.
+
+```{r}
+TF_Markers <- read_csv("Figure_Exports/TF_Markers.csv")
+# Mesenchyme lineage
+
+mes_tf_list <- c("TFAP2B_300","FLI1_133","ETS1_251",
+                 "TWIST1_741","NR2F1_220","ZBTB18_192")
+
+
+
+# Get CoAccessibile peaks in the mesenchyme lineage for each of the genes.
+TFAP2B_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("TFAP2B"), cutoff = 0.1)
+FLI1_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("FLI1"), cutoff = 0.1)
+ETS1_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("ETS1"), cutoff = 0.1)
+TWIST1_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("TWIST1"), cutoff = 0.1)
+NR2F1_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("NR2F1"), cutoff = 0.1)
+ZBTB18_Coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt, goi = c("ZBTB18"), cutoff = 0.1)
+
+# Binary presence of TF motif?
+Motif_in_Peak <- readRDS("/data/Austin/10XscATAC/ArchR_data_final_backup/Annotations/Motif-In-Peaks-Summary.rds")
+
+findMotifOverlaps <- function(tf = "", all_tfs = "",CoAccess = All_Peak_Combinations_anno_filt) {
+  tf_symbol <- str_split(tf, pattern = "_", simplify = T)[,1]
+  
+  tf_coaccess <- CorrelatedToGene(coaccess = All_Peak_Combinations_anno_filt,
+                                  goi = tf_symbol,
+                                  cutoff = 0.1)
+  
+  overlap1.df <- tf_coaccess[,c("Overlap1_chr","Overlap1_start","Overlap1_end")]
+  colnames(overlap1.df) <- c("chr","start","end")
+  overlap1.gr <- makeGRangesFromDataFrame(overlap1.df)
+  
+  # look at all factors in the lineage
+  for(each in all_tfs) {
+      tf.gr <- Motif_in_Peak$motifPositions[each]
+      # Count the number of overlaps that the motif has in the Overlap1 gr
+      overlaps <- findOverlaps(tf.gr, overlap1.gr)
+      print(paste0(tf_symbol, " has ", length(overlaps[,2]), " CoAccessible regions with a motif for ",
+                                              each))
+  }
+}
+
+FLI1_motif_summary <- findMotifOverlaps(tf = "TWIST1_741", all_tfs = mes_tf_list)
+
+
+```
+
 
 
 ```{r}
