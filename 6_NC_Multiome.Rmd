@@ -1,0 +1,40 @@
+---
+title: "NC Multiome"
+output: html_notebook
+---
+
+# Let's investigate PseudotimeDE
+
+```{r}
+suppressPackageStartupMessages({
+  library(ArchR)
+  library(knitr)
+  library(TFBSTools)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(ggrepel)
+  library(qdapTools)
+  library(parallel)
+  library(PseudotimeDE)
+  library(SingleCellExperiment)
+  library(slingshot)
+  library(tibble)
+  library(dplyr)
+  library(scales)
+  library(irlba)
+})
+
+
+addArchRThreads(threads = 62) 
+set.seed(1)
+# TODO we should copy this to a local directory
+# projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesis/")
+# projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
+# projNC <- addImputeWeights(projNC, sampleCells = 10000, nRep = 3, k = 20)
+# cluster_to_identity <- data.frame(cluster = paste0("C",1:10),
+#                                   identity = c("C1_Melanocytes","C2_Sensory_Glia","C3_Int_Mesenchyme",
+#                                                "C4_Multipotent_NC","C5_Hindbrain_Neurons","C6_Somatosensory_Neurons",
+#                                                "C7_Midbrain_Neurons","C8_Early_Mesenchyme","C9_Sensory_Neurons",
+#                                                "C10_Late_Mesenchyme"))
+# projNC$Cell_Identity <- lookup(projNC$Clusters, cluster_to_identity)
+```
