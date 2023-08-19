@@ -3,30 +3,26 @@ title: "NC Multiome"
 output: html_notebook
 ---
 
-# Let's investigate PseudotimeDE
+# NC Multiome
+
+## Setup
+
+```{r}
+library(renv)
+renv::activate()
+```
+
 
 ```{r}
 suppressPackageStartupMessages({
   library(ArchR)
-  library(knitr)
-  library(TFBSTools)
-  library(ComplexHeatmap)
-  library(ggplot2)
-  library(ggrepel)
-  library(qdapTools)
-  library(parallel)
-  library(PseudotimeDE)
-  library(SingleCellExperiment)
-  library(slingshot)
-  library(tibble)
-  library(dplyr)
-  library(scales)
-  library(irlba)
 })
-
 
 addArchRThreads(threads = 62) 
 set.seed(1)
+```
+
+```{r}
 # TODO we should copy this to a local directory
 # projNC <- loadArchRProject(path = "/data/Austin/10XscATAC/ArchR_data_final_thesis/")
 # projNC@projectMetadata$outputDirectory <- "./Figure_Exports"
