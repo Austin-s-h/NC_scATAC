@@ -10,17 +10,43 @@ output: html_notebook
 ```{r}
 library(renv)
 renv::activate()
+# install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
 ```
 
 
 ```{r}
 suppressPackageStartupMessages({
   library(ArchR)
+  library(BSgenome.Ggallus.ENSEMBL.galGal6)
+  library(GenomicFeatures)
+  library(RMariaDB)
+  library(org.Gg.eg.db)
 })
 
-addArchRThreads(threads = 62) 
+addArchRThreads(threads = 48) 
 set.seed(1)
+# Make a blacklist for AADN05001427.1
+arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
+# Manually remove noncontigous chromosomes.
+arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
+TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 106)
+OrgDb <- org.Gg.eg.db
+# arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = OrgDb, annoStyle = "ENSEMBL")
+arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filterChr = "MT")
 ```
+
+```{r}
+#Get Input Fragment Files
+inputFiles <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix"))
+names(inputFiles) <- "NC_Multiome"
+
+#Create Arrow Files (disabled here)
+ArrowFiles <- "PBMC_10k.arrow" #createArrowFiles(inputFiles, force = TRUE)
+
+#ArchRProject
+proj <- ArchRProject(ArrowFiles)
+```
+
 
 ```{r}
 # TODO we should copy this to a local directory

@@ -26,6 +26,9 @@
 	// 	"--env-file",
 	// 	".devcontainer/devcontainer.env"
 	// ],
+	"mounts": [
+		"source=/home/austin/Simoes-Costa/analysis/NC_Multiome,target=/workspaces/NC_scATAC/NC_Multiome,type=bind,consistency=cached"
+	  ],
 	"remoteEnv": {
 		"PATH": "${containerEnv:PATH}:/home/vscode/.local/bin"
 	},
