@@ -11,10 +11,7 @@ output: html_notebook
 library(renv)
 renv::activate()
 # install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
-```
 
-
-```{r}
 suppressPackageStartupMessages({
   library(ArchR)
   library(BSgenome.Ggallus.ENSEMBL.galGal6)
@@ -23,29 +20,136 @@ suppressPackageStartupMessages({
   library(org.Gg.eg.db)
 })
 
-addArchRThreads(threads = 48) 
+addArchRThreads(threads = 48)
 set.seed(1)
+```
+
+Genome Annotation
+
+```{r}
 # Make a blacklist for AADN05001427.1
-arch_gg6 <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filter = F)
 # Manually remove noncontigous chromosomes.
-arch_gg6$chromSizes <- arch_gg6$chromSizes[1:35]
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 106)
+genes <- trim(genes(TxDb_galGal6))
+exons <- trim(exons(TxDb_galGal6))
+TSS = trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
 OrgDb <- org.Gg.eg.db
-# arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = OrgDb, annoStyle = "ENSEMBL")
+
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = OrgDb,
+  enes = genes, exons = exons, TSS = TSS)
 arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filterChr = "MT")
 ```
 
 ```{r}
 #Get Input Fragment Files
-inputFiles <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix"))
-names(inputFiles) <- "NC_Multiome"
-
-#Create Arrow Files (disabled here)
-ArrowFiles <- "PBMC_10k.arrow" #createArrowFiles(inputFiles, force = TRUE)
+inputFiles <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/"))
+# TODO filter names so only bam_possorted_genome_bam files are included
+inputFiles
+createArrowFiles(
+  inputFiles = inputFiles,
+  geneAnnotation = arch_gg6_genes,
+  genomeAnnotation = arch_gg6_anno,
+  minTSS = 0.15,
+  maxTSS = 0.6,
+  minFrags = 3500,
+  maxFrags = 300000,
+  promoterRegion = c(2000, 500),
+  excludeChr = c("MT"),
+  addTileMat = TRUE,
+  threads = 48
+)
 
 #ArchRProject
-proj <- ArchRProject(ArrowFiles)
+proj <- ArchRProject(inputFiles)
 ```
+
+```{r}
+#Import scRNA
+seRNA <- import10xFeatureMatrix(
+    input = c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix.h5"),
+    names = c("PBMC_10k")
+)
+proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, force = TRUE)
+
+#Filter Cells
+# proj <- proj[proj$TSSEnrichment > 6 & proj$nFrags > 2500 & !is.na(proj$Gex_nUMI)]
+
+
+#Doublet Filtration. Currently disabled just for tutorial. If you want to filter doublets uncomment below.
+#proj <- addDoubletScores(proj)
+#proj <- filterDoublets(proj)
+```
+
+```{r}
+#LSI-ATAC
+proj <- addIterativeLSI(
+  ArchRProj = proj,
+  clusterParams = list(
+    resolution = 0.2,
+    sampleCells = 10000,
+    n.start = 10
+    ),
+  saveIterations = FALSE,
+  useMatrix = "TileMatrix",
+  depthCol = "nFrags",
+  name = "LSI_ATAC"
+)
+
+#LSI-RNA
+proj <- addIterativeLSI(
+    ArchRProj = proj, 
+    clusterParams = list(
+      resolution = 0.2, 
+      sampleCells = 10000,
+      n.start = 10
+    ),
+    saveIterations = FALSE,
+    useMatrix = "GeneExpressionMatrix", 
+    depthCol = "Gex_nUMI",
+    varFeatures = 2500,
+    firstSelection = "variable",
+    binarize = FALSE,
+    name = "LSI_RNA"
+)
+
+#Combined Dims
+proj <- addCombinedDims(proj, reducedDims = c("LSI_ATAC", "LSI_RNA"), name =  "LSI_Combined")
+
+#UMAPs
+proj <- addUMAP(proj, reducedDims = "LSI_ATAC", name = "UMAP_ATAC", minDist = 0.8, force = TRUE)
+proj <- addUMAP(proj, reducedDims = "LSI_RNA", name = "UMAP_RNA", minDist = 0.8, force = TRUE)
+proj <- addUMAP(proj, reducedDims = "LSI_Combined", name = "UMAP_Combined", minDist = 0.8, force = TRUE)
+#Add Clusters
+proj <- addClusters(proj, reducedDims = "LSI_Combined", name = "Clusters", resolution = 0.4, force = TRUE)
+
+#Plot Embedding
+p1 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_ATAC", size = 1.5, labelAsFactors=F, labelMeans=F)
+p2 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_RNA", size = 1.5, labelAsFactors=F, labelMeans=F)
+p3 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_Combined", size = 1.5, labelAsFactors=F, labelMeans=F)
+
+#Print Plots
+p1
+```
+
+```{r}
+p2
+```
+
+```{r}
+p3
+```
+
+```{r}
+#Save Plot
+plotPDF(p1, p2, p3, name = "UMAP-scATAC-scRNA-Combined", addDOC = FALSE)
+```
+
+
+## Load Existing ArchR scATAC seq data
+
+We also want to integrate these new samples (HH6 and HH18) with the existing timecourse based upon their scATAC seq signal.
+Optimally, we quantify the signal in the exact peakset used in the original analysis. In this first round, we will used
+
 
 
 ```{r}
