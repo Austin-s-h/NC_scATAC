@@ -29,38 +29,48 @@ Genome Annotation
 ```{r}
 # Make a blacklist for AADN05001427.1
 # Manually remove noncontigous chromosomes.
+# TxDb_galGal6 <- makeTxDbFromGFF("/workspaces/NC_scATAC/genes.gtf.gz",
+#   organism = "Gallus gallus", dataSource = "Ensembl", chrominfo=seqinfo(BSgenome.Ggallus.ENSEMBL.galGal6))
+
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 106)
 genes <- trim(genes(TxDb_galGal6))
 exons <- trim(exons(TxDb_galGal6))
 TSS = trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
-OrgDb <- org.Gg.eg.db
+gene_annotation <- SimpleList(genes, exons, TSS)
+# 
+# BUG This ends up being NULL because this fails
+# arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
+# arch_gg6_genes
 
-arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = OrgDb,
-  enes = genes, exons = exons, TSS = TSS)
 arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filterChr = "MT")
 ```
 
+Get Input Fragment Files
+
 ```{r}
-#Get Input Fragment Files
-inputFiles <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/"))
-# TODO filter names so only bam_possorted_genome_bam files are included
-inputFiles
-createArrowFiles(
-  inputFiles = inputFiles,
-  geneAnnotation = arch_gg6_genes,
+input_files <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/"))
+input_files <- input_files["atac_possorted"]
+
+# FEAT preflight check that if using atac_possorted from input_file that bcTag is not NULL
+# BUG blocking geneAnnotation is some error with selecting keys from the GeneAnnotation in createGenomeAnnotation
+arrow_files <- createArrowFiles(
+  inputFiles = input_files,
+  outputNames = c("NC_Multiome"),
+  geneAnnotation = gene_annotation,
   genomeAnnotation = arch_gg6_anno,
+  bcTag = c("CB"),
   minTSS = 0.15,
-  maxTSS = 0.6,
   minFrags = 3500,
-  maxFrags = 300000,
+  maxFrags = 300000,  # maybe 400K even
   promoterRegion = c(2000, 500),
   excludeChr = c("MT"),
   addTileMat = TRUE,
-  threads = 48
+  threads = 48,
+  cleanTmp = FALSE
 )
 
 #ArchRProject
-proj <- ArchRProject(inputFiles)
+proj <- ArchRProject(arrow_files)
 ```
 
 ```{r}
