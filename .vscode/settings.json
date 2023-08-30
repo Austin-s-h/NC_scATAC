@@ -1,0 +1,20 @@
+{
+  "[r]": {
+    "editor.formatOnSave": true,
+  },
+  "files.associations": {
+    "*.Rmd": "rmd",
+    "*.R": "r",
+  },
+  "r.plot.useHttpgd": true,
+  "r.rmarkdown.chunkBackgroundColor": "rgba(128, 128, 128, 0.2)",
+  "r.rmarkdown.enableCodeLens": true,
+  "r.rterm.linux": "/usr/local/bin/radian",
+  "r.alwaysUseActiveTerminal": true,
+  "r.bracketedPaste": true,
+  "r.lsp.promptToInstall": false,
+  "editor.rulers": [
+    80,
+    120
+  ],
+}
