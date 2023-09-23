@@ -35,13 +35,13 @@ Genome Annotation
 TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 106)
 genes <- trim(genes(TxDb_galGal6))
 exons <- trim(exons(TxDb_galGal6))
-TSS = trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
-gene_annotation <- SimpleList(genes, exons, TSS)
-# 
-# BUG This ends up being NULL because this fails
-# arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, annoStyle = "ENSEMBL")
-# arch_gg6_genes
+tss <- trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
+gene_annotation <- SimpleList(genes, exons, tss)
 
+# BUG This ends up being NULL because this fails
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, 
+  genes = genes, exons = exons, TSS = tss,  annoStyle = "ENSEMBL")
+arch_gg6_genes
 arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filterChr = "MT")
 ```
 
@@ -56,13 +56,14 @@ input_files <- input_files["atac_possorted"]
 arrow_files <- createArrowFiles(
   inputFiles = input_files,
   outputNames = c("NC_Multiome"),
-  geneAnnotation = gene_annotation,
+  geneAnnotation = arch_gg6_genes,
   genomeAnnotation = arch_gg6_anno,
   bcTag = c("CB"),
   minTSS = 0.15,
   minFrags = 3500,
-  maxFrags = 300000,  # maybe 400K even
+  maxFrags = 500000,  # maybe 400K even
   promoterRegion = c(2000, 500),
+  addGeneScoreMat = FALSE,
   excludeChr = c("MT"),
   addTileMat = TRUE,
   threads = 48,
@@ -70,24 +71,51 @@ arrow_files <- createArrowFiles(
 )
 
 #ArchRProject
-proj <- ArchRProject(arrow_files)
+proj <- ArchRProject( 
+  ArrowFiles = "NC_Multiome.arrow",
+  outputDirectory = "ArchROutput",
+  copyArrows = TRUE,
+  geneAnnotation = arch_gg6_genes,
+  genomeAnnotation = arch_gg6_anno,
+  showLogo = TRUE,
+  threads = getArchRThreads())
+
+#   SAVE POINT HERE, USED FOR PRE-FILTERING PLOTS.
+# saveArchRProject(proj, outputDirectory = "ArchROutput")
+# proj <- readArchRProject("ArchROutput")
+```
+
+```{r}
+
+
 ```
 
 ```{r}
 #Import scRNA
 seRNA <- import10xFeatureMatrix(
-    input = c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix.h5"),
-    names = c("PBMC_10k")
+  input = c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix.h5"),
+  names = c("")
+  # features = genes
 )
-proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, force = TRUE)
+mat <- assay(seRNA)
+colnames(mat) <- gsub("atac_possorted#|gex#","",colnames(assay(seRNA)))
+assay(mat, withDimnames=FALSE) <- mat
 
-#Filter Cells
-# proj <- proj[proj$TSSEnrichment > 6 & proj$nFrags > 2500 & !is.na(proj$Gex_nUMI)]
+noprefix <- gsub("atac_possorted#|gex#","",proj$cellNames)
+proj$noprefix <- noprefix
+subset <- which(proj$noprefix %in% neuron.list)
+subset <- na.omit(subset)
+neurons <- proj[subset, ]
+
+proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, excludeChr = "MT", chromSizes = arch_gg6_anno$chromSizes)
+
+# Filter Cells
+proj <- proj[proj$TSSEnrichment > 6 & proj$nFrags > 2500 & !is.na(proj$Gex_nUMI)]
 
 
-#Doublet Filtration. Currently disabled just for tutorial. If you want to filter doublets uncomment below.
-#proj <- addDoubletScores(proj)
-#proj <- filterDoublets(proj)
+# Doublet Filtration. Currently disabled just for tutorial. If you want to filter doublets uncomment below.
+proj <- addDoubletScores(proj)
+proj <- filterDoublets(proj)
 ```
 
 ```{r}

@@ -78,14 +78,15 @@
     },
     "ArchR": {
       "Package": "ArchR",
-      "Version": "1.0.2",
+      "Version": "1.0.3",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "ArchR",
       "RemoteUsername": "GreenleafLab",
-      "RemoteRef": "master",
-      "RemoteSha": "c61b0645d1482f80dcc24e25fbd915128c1b2500",
+      "RemoteRepo": "ArchR",
+      "RemoteRef": "65968a4068253783fe6b0918efcbf7d216a49ee7",
+      "RemoteSha": "65968a4068253783fe6b0918efcbf7d216a49ee7",
+      "Remotes": "GreenleafLab/chromVARmotifs, cole-trapnell-lab/monocle3, immunogenomics/presto",
       "Requirements": [
         "BiocGenerics",
         "Biostrings",
@@ -93,27 +94,34 @@
         "GenomicRanges",
         "Matrix",
         "Rcpp",
+        "RcppArmadillo",
         "Rsamtools",
         "S4Vectors",
+        "Seurat",
+        "SeuratObject",
         "SummarizedExperiment",
         "chromVAR",
+        "chromVARmotifs",
         "data.table",
+        "devtools",
         "ggplot2",
         "ggrepel",
-        "grid",
         "gridExtra",
         "gtable",
         "gtools",
+        "harmony",
         "magrittr",
         "matrixStats",
         "motifmatchr",
         "nabor",
         "plyr",
+        "presto",
         "rhdf5",
+        "sparseMatrixStats",
         "stringr",
         "uwot"
       ],
-      "Hash": "5a3b66fc717c0a22639800736664b8b3"
+      "Hash": "acb45854c8cd6fe06eed3caba6e8fbf8"
     },
     "BH": {
       "Package": "BH",
@@ -1379,6 +1387,22 @@
       ],
       "Hash": "44c9905f50cf2f92e0771c7f65e132da"
     },
+    "chromVARmotifs": {
+      "Package": "chromVARmotifs",
+      "Version": "0.2.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "GreenleafLab",
+      "RemoteRepo": "chromVARmotifs",
+      "RemoteRef": "master",
+      "RemoteSha": "38bed559c1f4770b6c91c80bf3f8ea965da26076",
+      "Requirements": [
+        "R",
+        "TFBSTools"
+      ],
+      "Hash": "a0fc0fbd597c3b871c7c5ca5d51bce59"
+    },
     "chron": {
       "Package": "chron",
       "Version": "2.3-61",
@@ -2134,6 +2158,33 @@
         "utils"
       ],
       "Hash": "88bb96eaf7140cdf29e374ef74182220"
+    },
+    "harmony": {
+      "Package": "harmony",
+      "Version": "0.1.1",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "harmony",
+      "RemoteUsername": "immunogenomics",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "63ebd73199b79ae0d7563425a765d76deb916fe3",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "Rcpp",
+        "RcppArmadillo",
+        "RcppProgress",
+        "cowplot",
+        "dplyr",
+        "ggplot2",
+        "irlba",
+        "methods",
+        "rlang",
+        "tibble",
+        "tidyr"
+      ],
+      "Hash": "22d7c694783c8b5d20a847fa7512e087"
     },
     "here": {
       "Package": "here",
@@ -2916,6 +2967,33 @@
       "Repository": "CRAN",
       "Hash": "a555924add98c99d2f411e37e7d25e9f"
     },
+    "presto": {
+      "Package": "presto",
+      "Version": "1.0.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "immunogenomics",
+      "RemoteRepo": "presto",
+      "RemoteRef": "master",
+      "RemoteSha": "31dc97fed5e2e7fc323ae4af62f72181cc51d9a3",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "Rcpp",
+        "RcppArmadillo",
+        "data.table",
+        "dplyr",
+        "methods",
+        "purrr",
+        "rlang",
+        "stats",
+        "tibble",
+        "tidyr",
+        "utils"
+      ],
+      "Hash": "fac5c65845cf95c995a3928de2f7ef09"
+    },
     "prettyunits": {
       "Package": "prettyunits",
       "Version": "1.1.1",
@@ -3582,6 +3660,19 @@
         "utils"
       ],
       "Hash": "2551981e6f85d59c81652bf654d6c3ca"
+    },
+    "sparseMatrixStats": {
+      "Package": "sparseMatrixStats",
+      "Version": "1.10.0",
+      "Source": "Bioconductor",
+      "Requirements": [
+        "Matrix",
+        "MatrixGenerics",
+        "Rcpp",
+        "matrixStats",
+        "methods"
+      ],
+      "Hash": "933b3f8bf04feb4d25e6512ab6e3b3c9"
     },
     "spatstat.data": {
       "Package": "spatstat.data",
