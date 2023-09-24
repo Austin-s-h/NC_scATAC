@@ -51,14 +51,12 @@ The first thing we need to do is separate out the scATAC-seq input files from th
 The important thing is to end up with a named vector of files corresponding to the scATAC-seq data and a named vector of files corresponding to the scRNA-seq data
  __and that the names of the corresponding samples match__! 
 
-```{r}
+```{r, eval=FALSE}
 prefix <- "/workspaces/NC_scATAC/NC_Multiome/outs/"
 input_files <- c(paste0(prefix,"atac_possorted_bam.bam"), paste0(prefix,"nc_filtered_feature_bc_matrix.h5"))
-names(input_files) <- c("NC_Multiome","NC_Multiome")
+names(input_files) <- c("NC_Multiome", "NC_Multiome")
 
-
-# FEAT preflight check that if using atac_possorted from input_file that bcTag is not NULL
-# BUG blocking geneAnnotation is some error with selecting keys from the GeneAnnotation in createGenomeAnnotation
+addGeneScoreMat has a bug in it I think?
 arrow_files <- createArrowFiles(
   inputFiles = input_files[1],
   outputNames = c("NC_Multiome"),
@@ -77,7 +75,9 @@ arrow_files <- createArrowFiles(
   cleanTmp = FALSE,
   force = TRUE
 )
+```
 
+```{r}
 #ArchRProject
 proj <- ArchRProject( 
   ArrowFiles = "NC_Multiome.arrow",
@@ -88,24 +88,25 @@ proj <- ArchRProject(
   showLogo = TRUE,
   threads = getArchRThreads())
 
-#   SAVE POINT HERE, USED FOR PRE-FILTERING PLOTS.
-# saveArchRProject(proj, outputDirectory = "ArchROutput")
-# proj <- readArchRProject("ArchROutput")
-```
-
-```{r}
 #Import scRNA
 seRNA <- import10xFeatureMatrix(
   input = input_files[2],
   names = c("NC_Multiome"),
-  strictMatch = TRUE
-  )
+  strictMatch = TRUE)
+
+cells_to_keep <- which(getCellNames(proj) %in% colnames(seRNA))
+
+proj <- subsetArchRProject(ArchRProj = proj,  cells = getCellNames(proj)[cells_to_keep])
+
 
 proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, excludeChr = "MT", chromSizes = arch_gg6_anno$chromSizes)
 
 # Doublet Filtration. Currently disabled just for tutorial. If you want to filter doublets uncomment below.
 proj <- addDoubletScores(proj)
 proj <- filterDoublets(proj)
+
+#   SAVE POINT HERE, USED FOR PRE-FILTERING PLOTS.
+# saveArchRProject(proj, outputDirectory = "ArchROutput")
 ```
 
 
@@ -128,8 +129,29 @@ for integration with existing analysis.
 ```{r}
 # DEBUG
 # Inspect SE matrix with
-se <- getGroupSE(proj, useMatrix = "GeneExpressionMatrix")
 se <- getGroupSE(proj, useMatrix = "TileMatrix")
+
+
+"""
+# rrorList$outLSI: length = 1
+# [1] "Error with outLSI!"
+# errorList$matSVD: length = 1
+# [1] "Error with matSVD!"
+
+NA's in the cells possibly 
+
+errorList$cellDepth: length = 16467
+NC_Multiome#CTCATTTAGGTGCGGA-1 NC_Multiome#GTGTGCGGTAGGTGTC-1 NC_Multiome#ATAACGACACCTACGG-1 NC_Multiome#ATTCACTTCATCAGTA-1 
+                      4.689051                       4.270609                             NA                       4.144854 
+NC_Multiome#ATTACCCGTTAGTACG-1 NC_Multiome#CTCTAAGCAACAGCCT-1 
+                      4.911243                       4.428491 
+
+                      GeneExpressionMatrix
+"""
+
+# Attempt 1, remove cells that aren't in both assays
+# ABOVE
+
 #LSI-ATAC
 proj <- addIterativeLSI(
   ArchRProj = proj,
@@ -144,6 +166,7 @@ proj <- addIterativeLSI(
   name = "LSI_ATAC"
 )
 
+se <- getGroupSE(proj, useMatrix = "GeneExpressionMatrix")
 #LSI-RNA
 proj <- addIterativeLSI(
   ArchRProj = proj,
