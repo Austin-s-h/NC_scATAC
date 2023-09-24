@@ -20,7 +20,7 @@ suppressPackageStartupMessages({
   library(org.Gg.eg.db)
 })
 
-addArchRThreads(threads = 48)
+addArchRThreads(threads = 44)
 set.seed(1)
 ```
 
@@ -47,27 +47,35 @@ arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal
 
 Get Input Fragment Files
 
+The first thing we need to do is separate out the scATAC-seq input files from the scRNA-seq input files.
+The important thing is to end up with a named vector of files corresponding to the scATAC-seq data and a named vector of files corresponding to the scRNA-seq data
+ __and that the names of the corresponding samples match__! 
+
 ```{r}
-input_files <- getInputFiles(paths=c("/workspaces/NC_scATAC/NC_Multiome/outs/"))
-input_files <- input_files["atac_possorted"]
+prefix <- "/workspaces/NC_scATAC/NC_Multiome/outs/"
+input_files <- c(paste0(prefix,"atac_possorted_bam.bam"), paste0(prefix,"nc_filtered_feature_bc_matrix.h5"))
+names(input_files) <- c("NC_Multiome","NC_Multiome")
+
 
 # FEAT preflight check that if using atac_possorted from input_file that bcTag is not NULL
 # BUG blocking geneAnnotation is some error with selecting keys from the GeneAnnotation in createGenomeAnnotation
 arrow_files <- createArrowFiles(
-  inputFiles = input_files,
+  inputFiles = input_files[1],
   outputNames = c("NC_Multiome"),
   geneAnnotation = arch_gg6_genes,
   genomeAnnotation = arch_gg6_anno,
   bcTag = c("CB"),
+  gsubExpression = c("atac_possorted#|gex#"),
   minTSS = 0.15,
   minFrags = 3500,
-  maxFrags = 500000,  # maybe 400K even
+  maxFrags = 500000,  # maybe 500K even
   promoterRegion = c(2000, 500),
   addGeneScoreMat = FALSE,
   excludeChr = c("MT"),
   addTileMat = TRUE,
   threads = 48,
-  cleanTmp = FALSE
+  cleanTmp = FALSE,
+  force = TRUE
 )
 
 #ArchRProject
@@ -86,39 +94,42 @@ proj <- ArchRProject(
 ```
 
 ```{r}
-
-
-```
-
-```{r}
 #Import scRNA
 seRNA <- import10xFeatureMatrix(
-  input = c("/workspaces/NC_scATAC/NC_Multiome/outs/filtered_feature_bc_matrix.h5"),
-  names = c("")
-  # features = genes
-)
-mat <- assay(seRNA)
-colnames(mat) <- gsub("atac_possorted#|gex#","",colnames(assay(seRNA)))
-assay(mat, withDimnames=FALSE) <- mat
-
-noprefix <- gsub("atac_possorted#|gex#","",proj$cellNames)
-proj$noprefix <- noprefix
-subset <- which(proj$noprefix %in% neuron.list)
-subset <- na.omit(subset)
-neurons <- proj[subset, ]
+  input = input_files[2],
+  names = c("NC_Multiome"),
+  strictMatch = TRUE
+  )
 
 proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, excludeChr = "MT", chromSizes = arch_gg6_anno$chromSizes)
-
-# Filter Cells
-proj <- proj[proj$TSSEnrichment > 6 & proj$nFrags > 2500 & !is.na(proj$Gex_nUMI)]
-
 
 # Doublet Filtration. Currently disabled just for tutorial. If you want to filter doublets uncomment below.
 proj <- addDoubletScores(proj)
 proj <- filterDoublets(proj)
 ```
 
+
+## Naive analysis
+
+Now that we have performed basic QC filtering and doublet removal
+
+Filtering 2272 cells from ArchRProject!
+        NC_Multiome : 2272 of 18739 (12.1%)
+
+We can perform a niave analysis of the data to see what we can find. Afterwards, we have a couple of different options
+for integration with existing analysis.
+
+1. Add a new peakset (from existing timecourse) to the ArchR project and re-quantify to align the ATAC-Seq data.
+  Next, map clusters from the existing timecourse to the new data. Then, using the new GEX data, call differential expression based on these clusters.
+2. Perform some sort of integration (Harmony) across the ATAC samples and repeat all analysis with additional ATAC samples. 
+  Then, use the shared cell barcodes to map gene expression to the ATAC tree.
+3. Identify clusters in the new data and overlay cluster peak enrichment from the timecourse to identity lineages and confirm with independent GEX.
+
 ```{r}
+# DEBUG
+# Inspect SE matrix with
+se <- getGroupSE(proj, useMatrix = "GeneExpressionMatrix")
+se <- getGroupSE(proj, useMatrix = "TileMatrix")
 #LSI-ATAC
 proj <- addIterativeLSI(
   ArchRProj = proj,
@@ -126,7 +137,7 @@ proj <- addIterativeLSI(
     resolution = 0.2,
     sampleCells = 10000,
     n.start = 10
-    ),
+  ),
   saveIterations = FALSE,
   useMatrix = "TileMatrix",
   depthCol = "nFrags",
@@ -135,19 +146,19 @@ proj <- addIterativeLSI(
 
 #LSI-RNA
 proj <- addIterativeLSI(
-    ArchRProj = proj, 
-    clusterParams = list(
-      resolution = 0.2, 
-      sampleCells = 10000,
-      n.start = 10
-    ),
-    saveIterations = FALSE,
-    useMatrix = "GeneExpressionMatrix", 
-    depthCol = "Gex_nUMI",
-    varFeatures = 2500,
-    firstSelection = "variable",
-    binarize = FALSE,
-    name = "LSI_RNA"
+  ArchRProj = proj,
+  clusterParams = list(
+    resolution = 0.2,
+    sampleCells = 10000,
+    n.start = 10
+  ),
+  saveIterations = FALSE,
+  useMatrix = "GeneExpressionMatrix",
+  depthCol = "Gex_nUMI",
+  varFeatures = 2500,
+  firstSelection = "variable",
+  binarize = FALSE,
+  name = "LSI_RNA"
 )
 
 #Combined Dims
@@ -161,27 +172,25 @@ proj <- addUMAP(proj, reducedDims = "LSI_Combined", name = "UMAP_Combined", minD
 proj <- addClusters(proj, reducedDims = "LSI_Combined", name = "Clusters", resolution = 0.4, force = TRUE)
 
 #Plot Embedding
-p1 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_ATAC", size = 1.5, labelAsFactors=F, labelMeans=F)
-p2 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_RNA", size = 1.5, labelAsFactors=F, labelMeans=F)
-p3 <- plotEmbedding(proj, name = "Clusters", embedding = "UMAP_Combined", size = 1.5, labelAsFactors=F, labelMeans=F)
+p1 <- plotEmbedding(projMulti2, name = "Clusters_Combined", embedding = "UMAP_ATAC", size = 1, labelAsFactors=F, labelMeans=F)
+p2 <- plotEmbedding(projMulti2, name = "Clusters_Combined", embedding = "UMAP_RNA", size = 1, labelAsFactors=F, labelMeans=F)
+p3 <- plotEmbedding(projMulti2, name = "Clusters_Combined", embedding = "UMAP_Combined", size = 1, labelAsFactors=F, labelMeans=F)
 
-#Print Plots
-p1
+p <- lapply(list(p1,p2,p3), function(x){
+  x + guides(color = "none", fill = "none") + 
+    theme_ArchR(baseSize = 6.5) +
+    theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+    theme(
+      axis.text.x=element_blank(), 
+      axis.ticks.x=element_blank(), 
+      axis.text.y=element_blank(), 
+      axis.ticks.y=element_blank()
+    )
+})
+
+do.call(cowplot::plot_grid, c(list(ncol = 3),p))
+plotPDF(p1, p2, p3, name = "NC_Multiome_UMAP-scATAC-scRNA-Combined", addDOC = FALSE)
 ```
-
-```{r}
-p2
-```
-
-```{r}
-p3
-```
-
-```{r}
-#Save Plot
-plotPDF(p1, p2, p3, name = "UMAP-scATAC-scRNA-Combined", addDOC = FALSE)
-```
-
 
 ## Load Existing ArchR scATAC seq data
 
