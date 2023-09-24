@@ -7,6 +7,7 @@ output: html_notebook
 
 ## Setup
 
+
 ```{r}
 library(renv)
 renv::activate()
@@ -56,14 +57,14 @@ prefix <- "/workspaces/NC_scATAC/NC_Multiome/outs/"
 input_files <- c(paste0(prefix,"atac_possorted_bam.bam"), paste0(prefix,"nc_filtered_feature_bc_matrix.h5"))
 names(input_files) <- c("NC_Multiome", "NC_Multiome")
 
-addGeneScoreMat has a bug in it I think?
+# addGebeExpressionMatrix has a bug in it, but we overwrite it with the correct one anyways
 arrow_files <- createArrowFiles(
   inputFiles = input_files[1],
   outputNames = c("NC_Multiome"),
   geneAnnotation = arch_gg6_genes,
   genomeAnnotation = arch_gg6_anno,
   bcTag = c("CB"),
-  gsubExpression = c("atac_possorted#|gex#"),
+  gsubExpression = c("NC_Multiome#"),
   minTSS = 0.15,
   minFrags = 3500,
   maxFrags = 500000,  # maybe 500K even
@@ -79,7 +80,7 @@ arrow_files <- createArrowFiles(
 
 ```{r}
 #ArchRProject
-proj <- ArchRProject( 
+proj <- ArchRProject(
   ArrowFiles = "NC_Multiome.arrow",
   outputDirectory = "ArchROutput",
   copyArrows = TRUE,
