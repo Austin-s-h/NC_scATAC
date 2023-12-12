@@ -55,3 +55,14 @@ tmp/
 # Exported Images
 /Figure_Exports/
 NC_Multiome/
+
+#
+.venv/*
+data/*
+QualityControl/*
+NC_Multiome_*/*
+NC_ATAC_Integration/*
+*.logs
+*.h5
+HH6_NPB_Multiome_95/*
+HH18_SORT_Multiome_95/*

@@ -14,11 +14,13 @@ git clone https://github.com/Austin-s-h/xxxx
 
 ```R
 # Correlation Analysis
-
 source("./Scripts/Correlation.R")
-...
 ```
 
+```bash
+# Render notebook
+Rscript -e "rmarkdown::render('./6_NC_Multome.Rmd')"
+```
 ## Contributing
 I would love to grow this repository with input from others working on single-cell time course data. If you wish to contribute code, please open a Github issue or create a pull request.
 
