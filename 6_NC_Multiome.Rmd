@@ -38,8 +38,6 @@ genes <- trim(genes(TxDb_galGal6))
 exons <- trim(exons(TxDb_galGal6))
 tss <- trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
 gene_annotation <- SimpleList(genes, exons, tss)
-
-# BUG This ends up being NULL because this fails
 arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, 
   genes = genes, exons = exons, TSS = tss,  annoStyle = "ENSEMBL")
 arch_gg6_genes
@@ -86,7 +84,8 @@ proj <- ArchRProject(
   geneAnnotation = arch_gg6_genes,
   genomeAnnotation = arch_gg6_anno,
   showLogo = TRUE,
-  threads = getArchRThreads())
+  threads = getArchRThreads()
+  )
 
 # Import scRNA
 seRNA <- import10xFeatureMatrix(
@@ -107,9 +106,6 @@ proj <- addGeneExpressionMatrix(input = proj, seRNA = seRNA, excludeChr = "MT", 
 # Doublet Filtration.
 proj <- addDoubletScores(proj)
 proj <- filterDoublets(proj)
-
-#   SAVE POINT HERE, USED FOR PRE-FILTERING PLOTS.
-saveArchRProject(proj, outputDirectory = "NC_Multome_save")
 ```
 
 
@@ -180,10 +176,10 @@ source("MultiModal.R")
 proj <- addCombinedDims2(proj, name =  "LSI_Combined",
   reducedDims = c("LSI_ATAC", "LSI_RNA"),
   dimWeights = c(1,1),
-  dimsToUse = c(1:12),
+  dimsToUse = c(1:20),
   scaleDims = F)
-
-# (proj, name =  "LSI_Combined", reducedDims = c("LSI_ATAC", "LSI_RNA"), dimsToUse = c(1:15))
+# 
+# proj <- addCombinedDims(proj, name =  "LSI_Combined", reducedDims = c("LSI_ATAC", "LSI_RNA"), dimsToUse = c(1:30))
 
 #UMAPs
 proj <- addUMAP(proj, reducedDims = "LSI_ATAC", name = "UMAP_ATAC", minDist = 0.8, force = TRUE)
@@ -211,33 +207,79 @@ p <- lapply(list(p1,p2,p3), function(x){
 
 do.call(cowplot::plot_grid, c(list(ncol = 3),p))
 plotPDF(p1, p2, p3, name = "NC_Multiome_UMAP-scATAC-scRNA-Combined", addDOC = FALSE)
+
+### Subset into HH6_2 and HH18_2 based on initial clustering and my best guess.
+cells_in_HH6_2 <- getCellNames(proj)[proj$Clusters %in% c("C9", "C8", "C1")]
+cells_in_HH18_2 <- getCellNames(proj)[proj$Clusters %in% c("C2", "C3", "C4", "C5", "C6", "C7")]
+
+sum(length(cells_in_HH6_2) + length(cells_in_HH18_2))
+
+hh6_2 <- subsetArchRProject(
+  ArchRProj = proj,
+  cells = cells_in_HH6_2,
+  outputDirectory = "NC_Multiome_HH6_2",
+  dropCells = TRUE,
+  logFile = NULL,
+  threads = getArchRThreads(),
+  force = FALSE
+)
+
+hh18_2 <- subsetArchRProject(
+  ArchRProj = proj,
+  cells = cells_in_HH18_2,
+  outputDirectory = "NC_Multiome_HH18_2",
+  dropCells = TRUE,
+  logFile = NULL,
+  threads = getArchRThreads(),
+  force = FALSE
+)
+
+# SAVE POINT HERE
+# Start of 7_NC_Multiome_Integration.Rmd
+saveArchRProject(proj, outputDirectory = "NC_Multome_save")
 ```
 
 ### Additional notes
 
+Below doesn't work.
 You'll notice that there are some differences between the cluster residence of cells in the scATAC-seq space and cells in the scRNA-seq space. We can visualize these differences using a confusion matrix.
 
 ```{r, collapse=TRUE}
-cM_atac_rna <- confusionMatrix(paste0(projMulti2$Clusters_ATAC), paste0(projMulti2$Clusters_RNA))
-cM_atac_rna <- cM_atac_rna / Matrix::rowSums(cM_atac_rna)
+# cM_atac_rna <- confusionMatrix(paste0(proj$Clusters_ATAC), paste0(proj$Clusters_RNA))
+# cM_atac_rna <- cM_atac_rna / Matrix::rowSums(cM_atac_rna)
 
-library(pheatmap)
-p_atac_rna <- pheatmap::pheatmap(
-  mat = as.matrix(cM_atac_rna), 
-  color = paletteContinuous("whiteBlue"), 
-  border_color = "black"
-)
+# library(pheatmap)
+# p_atac_rna <- pheatmap::pheatmap(
+#   mat = as.matrix(cM_atac_rna), 
+#   color = paletteContinuous("whiteBlue"), 
+#   border_color = "black"
+# )
 ```
 
 Nearly all of the downstream operations that you will want to do downstream are equivalent to what is shown throughout the manual for the scATAC-seq-only analyses so we wont go into them here. As an example, to get peak-to-gene links from multiome data, we could use the following code.
 
-```{r, collapse=TRUE}
-projMulti2 <- addGroupCoverages(ArchRProj = projMulti2, groupBy = "Clusters_Combined")
-projMulti2 <- addReproduciblePeakSet(ArchRProj = projMulti2, groupBy = "Clusters_Combined", pathToMacs2 = "/corces/home/rcorces/tools/python/p3.8.5/bin/macs2")
-projMulti2 <- addPeakMatrix(ArchRProj = projMulti2)
-projMulti2 <- addPeak2GeneLinks(ArchRProj = projMulti2, reducedDims = "LSI_Combined", useMatrix = "GeneExpressionMatrix")
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install macs3
 
-p2g <- getPeak2GeneLinks(ArchRProj = projMulti2)
+# Run report to estimate -l -u and -c for downstream
+#macs3 hmmratac --cutoff-analysis-only -b your.bam
+# I'm not going to re-run peak calling with hmmratac, but I WANT TO.
+#macs3 hmmratac -b test/yeast_500k_SRR1822137.bam -n hmmratac_yeast500k
+```
+
+```{r, collapse=TRUE}
+proj <- addGroupCoverages(ArchRProj = proj, groupBy = "Clusters")
+
+# Add the GRANGE peakset from the original timecourse
+
+# proj <- addReproduciblePeakSet(ArchRProj = proj, groupBy = "Clusters",
+#   pathToMacs2 = "/workspaces/NC_scATAC/.venv/bin/macs3")
+proj <- addPeakMatrix(ArchRProj = proj)
+proj <- addPeak2GeneLinks(ArchRProj = proj, reducedDims = "LSI_Combined", 
+ useMatrix = "GeneExpressionMatrix")
+p2g <- getPeak2GeneLinks(ArchRProj = proj)
 
 p2g[[1]]
 ```
@@ -245,7 +287,7 @@ p2g[[1]]
 There are, of course, some aspects of the analysis which you should tweak when using multiome data. One such example is the `bias` argument to `getMarkerFeatures()` which can be tweaked to account for both scATAC-seq data quality (`"TSSEnrichment`) and read depth for both assays (`"log10(nFrags)"` for scATAC-seq and `"log10(Gex_nUMI)"` for scRNA-seq).
 
 ```{r, collapse=TRUE}
-se <- getMarkerFeatures(ArchRProj = projMulti2,
+se <- getMarkerFeatures(ArchRProj = proj,
                         groupBy = "Clusters_Combined",
                         bias = c("TSSEnrichment", "log10(nFrags)", "log10(Gex_nUMI)"))
 

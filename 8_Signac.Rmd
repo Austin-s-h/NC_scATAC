@@ -1,0 +1,86 @@
+
+```{r}
+library(renv)
+renv::activate()
+# setRepositories(ind=1:3) needed to automatically install Bioconductor dependencies
+# install.packages("Signac")
+# install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
+
+suppressPackageStartupMessages({
+  library(BSgenome.Ggallus.ENSEMBL.galGal6)
+  library(GenomicFeatures)
+  library(RMariaDB)
+  library(org.Gg.eg.db)
+  library(dplyr)
+  library(JASPAR2020)
+  library(Seurat)
+  library(Signac)
+  library(ggplot2)
+})
+
+prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
+
+seurat_list <- list()
+
+for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
+  input_tsv_file <- c(paste0(prefix, s, "/", s, "_fragments.tsv.gz"))
+  input_csv_file <- c(paste0(prefix, s, "/", s, "_singlecell.csv"))
+  names(input_tsv_file) <- s
+  names(input_csv_file) <- s
+  # Load data
+  fragments <- Read10X(data.dir = input_file)
+  metadata <- read.csv(file = input_csv_file, header = TRUE, row.names = 1)
+
+  # Create a Seurat object
+  seurat_obj <- CreateSeuratObject(counts = fragments, project = paste0(s), meta.data = metadata)
+    # Add the Seurat object to the list
+  seurat_list[[s]] <- seurat_obj
+}
+
+
+# Normalize the data
+seurat_list <- lapply(seurat_list, function(x) {
+  NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
+})
+
+# Find variable features
+seurat_list <- lapply(seurat_list, function(x) {
+  FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+
+# Identify anchors+
+anchors <- FindIntegrationAnchors(object.list = seurat_list, dims = 1:30)
+
+# Integrate the data
+integrated <- IntegrateData(anchorset = anchors, dims = 1:30)
+```
+
+```{r}
+# Compute metrics
+seurat_obj <- PercentageFeatureSet(seurat_obj, pattern = "^MT", col.name = "percent.mt")
+
+# Normalize the data
+seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+
+# Find variable features
+seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000)
+
+# Scale the data
+all.genes <- rownames(seurat_obj)
+seurat_obj <- ScaleData(seurat_obj, features = all.genes)
+
+# Perform linear dimensional reduction
+seurat_obj <- RunPCA(seurat_obj, features = VariableFeatures(object = seurat_obj))
+
+# Cluster the cells
+seurat_obj <- FindNeighbors(seurat_obj, dims = 1:10)
+seurat_obj <- FindClusters(seurat_obj, resolution = 0.5)
+
+# Run non-linear dimensional reduction (UMAP/tSNE)
+seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
+seurat_obj <- RunTSNE(seurat_obj, dims = 1:10)
+
+# Visualize the data
+DimPlot(seurat_obj, reduction = "umap")
+DimPlot(seurat_obj, reduction = "tsne")
+```

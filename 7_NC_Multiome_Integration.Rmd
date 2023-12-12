@@ -1,0 +1,360 @@
+---
+title: "NC Multiome Integration"
+output: html_notebook
+---
+
+# NC Multiome Integration
+
+So, we have done some basic QC and gotten enough information to feel good about the cells from the 
+HH6 / HH18 Multome samples. Now, we can create a single project for ATAC-Seq based integration.
+We have a list of arrow files that we can use to create a single project.
+
+## Setup
+
+
+```{r}
+library(renv)
+renv::activate()
+# install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
+
+suppressPackageStartupMessages({
+  library(ArchR)
+  library(BSgenome.Ggallus.ENSEMBL.galGal6)
+  library(GenomicFeatures)
+  library(RMariaDB)
+  library(org.Gg.eg.db)
+  library(dplyr)
+  library(JASPAR2020)
+})
+
+addArchRThreads(threads = 44)
+set.seed(1)
+TxDb_galGal6 <- makeTxDbFromEnsembl(organism = "Gallus gallus", release = 95)
+genes <- trim(genes(TxDb_galGal6))
+exons <- trim(exons(TxDb_galGal6))
+tss <- trim(promoters(TxDb_galGal6, upstream = 2000, downstream = 500))
+gene_annotation <- SimpleList(genes, exons, tss)
+arch_gg6_genes <- createGeneAnnotation(TxDb = TxDb_galGal6, OrgDb = org.Gg.eg.db, 
+  genes = genes, exons = exons, TSS = tss,  annoStyle = "ENSEMBL")
+arch_gg6_genes
+arch_gg6_anno <- createGenomeAnnotation(genome = BSgenome.Ggallus.ENSEMBL.galGal6, filterChr = "MT")
+```
+
+Create an ArchR project from stratch
+```{r}
+prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
+
+for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
+  input_file <- c(paste0(prefix, s, "/", s, "_fragments.tsv.gz"))
+  names(input_file) <- s
+  arrow_files <- createArrowFiles(
+    inputFiles = input_file,
+    outputNames = s,
+    geneAnnotation = arch_gg6_genes,
+    genomeAnnotation = arch_gg6_anno,
+    bcTag = c("CB"),
+    minTSS = 0.15,
+    minFrags = 3500,
+    maxFrags = 500000,
+    promoterRegion = c(2000, 500),
+    addGeneScoreMat = FALSE,
+    excludeChr = c("MT"),
+    addTileMat = TRUE,
+    cleanTmp = TRUE,
+    force = TRUE
+  )
+}
+
+for (s in c("HH6_NPB", "HH18_SORT")) {
+  input_file <- c(paste0(s, "_Multiome_95/outs/atac_fragments.tsv.gz"))
+  names(input_file) <- s
+  arrow_files <- createArrowFiles(
+    inputFiles = input_file,
+    outputNames = s,
+    geneAnnotation = arch_gg6_genes,
+    genomeAnnotation = arch_gg6_anno,
+    bcTag = c("CB"),
+    minTSS = 0.15,
+    minFrags = 3500,
+    maxFrags = 500000,
+    promoterRegion = c(2000, 500),
+    addGeneScoreMat = FALSE,
+    excludeChr = c("MT"),
+    addTileMat = TRUE,
+    cleanTmp = TRUE,
+    force = TRUE
+  )
+}
+```
+
+
+
+Create an ArchR project from a list of arrow files
+
+```{r}
+arrow_files <- c("data/HH6.arrow", "data/HH6_NPB.arrow", "data/HH8.arrow", "data/HH10.arrow",
+  "data/HH12.arrow", "data/HH14.arrow", "data/HH16.arrow", "data/HH18.arrow", "data/HH18_SORT.arrow")
+names(arrow_files) <- c("HH6", "HH6_NPB", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH18_SORT")
+
+proj_integration <- ArchRProject(
+  ArrowFiles = arrow_files,
+  outputDirectory = "NC_ATAC_Integration",
+  copyArrows = T,
+  geneAnnotation = arch_gg6_genes,
+  genomeAnnotation = arch_gg6_anno)
+
+# Doublet Filtration.
+proj_integration <- addDoubletScores(proj_integration)
+proj_integration <- filterDoublets(proj_integration)
+
+# Now let's filter by the metrics determined from other QC plots.
+# proj_integration <- proj_integration[proj_integration$TSSEnrichment >= 3.5]
+# proj_integration <- proj_integration[proj_integration$FRIP >= 0.4]
+# proj_integration <- proj_integration[log10(proj_integration$nFrags) >= 3.3]
+
+library(dplyr)
+cd <- as.data.frame(getCellColData(proj_integration)) %>%
+  mutate(batch = case_when(
+    Sample %in% c("HH8", "HH10", "HH14", "HH16") ~ "batch1",
+    Sample %in% c("HH6", "HH18") ~ "batch2",
+    Sample %in% c("HH12") ~ "batch3",
+    Sample %in% c("HH6_NPB_95","HH18_SORT_95")  ~ "batch4"
+  ))
+proj_integration$batch <- cd$batch
+
+saveArchRProject(proj_integration,
+  outputDirectory = "NC_ATAC_Integration")
+
+getChromSizes(ArchRProj = proj_integration)
+```
+
+GRanges object with 32 ranges and 0 metadata columns:
+       seqnames      ranges strand
+          <Rle>   <IRanges>  <Rle>
+   [1]        1 1-197608386      *
+   [2]        2 1-149682049      *
+   [3]        3 1-110838418      *
+   [4]        4  1-91315245      *
+   [5]        5  1-59809098      *
+   ...      ...         ...    ...
+  [28]       28   1-5116882      *
+  [29]       30   1-1818525      *
+  [30]       31   1-6153034      *
+  [31]       32    1-725831      *
+  [32]       33   1-7821666      *
+  -------
+  seqinfo: 32 sequences from an unspecified genome
+
+
+I think there might have been an error with the integration due to the 10X annotation being different. I need to re-run
+my samples with the annotation folder I copied from the lab server? I think?
+
+```{bash}
+
+```
+
+### Not run below
+
+```{r}
+getChromSizes(ArchRProj = proj_integration)
+
+ArchR:::.availableSeqnames(proj_integration, subGroup = "TileMatrix")
+# Error in `[.ArchRProject`(ArrowFiles, x) : 
+# Length of subsetting cells must be greater than 1!
+
+# I cannot get this to work, what chromosomes are not shared between all samples?
+
+#LSI-ATAC
+proj_integration <- addIterativeLSI(
+  ArchRProj = proj_integration,
+  clusterParams = list(
+    resolution = 0.2,
+    sampleCells = 20000,
+    n.start = 10
+  ),
+  saveIterations = FALSE,
+  useMatrix = "TileMatrix",
+  depthCol = "nFrags",
+  name = "LSI_ATAC",
+)
+
+# Error in .availableSeqnames(ArrowFiles, subGroup = useMatrix) : 
+# Not All Seqnames Identical!
+
+proj_integration <- addUMAP(
+    ArchRProj = proj_integration, 
+    reducedDims = "IterativeLSI",
+    dimsToUse = c(1:30),
+    name = "UMAP", 
+    nNeighbors = 30, 
+    minDist = 0.22, 
+    spread = 0.8,
+    metric = "cosine",
+    force = T,
+    n_components = 2,
+    saveModel = F,
+    repulsion_strength = 1.2)
+
+proj_integration <- addUMAP(
+    ArchRProj = proj_integration, 
+    reducedDims = "IterativeLSI",
+    dimsToUse = c(1:30),
+    name = "UMAP_3d", 
+    nNeighbors = 30, 
+    minDist = 0.22, 
+    spread = 0.8,
+    metric = "cosine",
+    force = T,
+    n_components = 3,
+    saveModel = F,
+    repulsion_strength = 1.2)
+
+proj_integration <- addClusters(
+    input = proj_integration,
+    reducedDims = "IterativeLSI",
+    method = "Seurat",
+    name = "Clusters",
+    dimsToUse = c(1:30),
+    resolution = 0.38,
+    knnAssign = 30,
+    nOutlier = 20,
+    n.iter = 20,
+    force = T)
+
+# 2D
+p1 <- plotEmbedding(ArchRProj = proj_integration, colorBy = "cellColData", name = "Sample", embedding = "UMAP", size = 1, baseSize = 14)
+p1
+
+# 3D
+df_3d <- getEmbedding(proj_integration, embedding = "UMAP_3d", returnDF = TRUE)
+colnames(df_3d) <- c("UMAP_1","UMAP_2","UMAP_3")
+df_3d$Sample <- proj_integration$Sample
+df_3d$SeuratClusters <- proj_integration$Clusters
+df_3d$Pseudotime <- proj_integration$hour_adj_pseudotime
+
+p1_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Sample, size = I(14)) %>% add_markers()
+p2_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Pseudotime, size = I(10)) %>% add_markers()
+
+
+p2 <- plotEmbedding(ArchRProj = proj_integration, colorBy = "cellColData", name = "Clusters", embedding = "UMAP", size = 1, baseSize = 14)
+p2
+
+cowplot::plot_grid(p1 + p2)
+
+```
+
+What about motif enrichment? First, let's get differential peaks.
+
+```{r}
+# Add reproducible peakset to project
+proj_integration <- addReproduciblePeakSet(
+       ArchRProj = proj_integration,
+       groupBy = "Clusters",
+       peakMethod = "Macs2",
+       reproducibility = "2",
+       peaksPerCell = 2500,
+       maxPeaks = 350000,
+       minCells = 50,
+       excludeChr = c("MT"),
+       pathToMacs2 = "/workspaces/NC_scATAC/.venv/bin/macs3",
+       genomeSize = 1065348650,
+       shift = -75,
+       extsize = 150,
+       cutOff = 0.1,
+       additionalParams = "--nomodel --nolambda",
+       extendSummits = 250,
+       promoterRegion = c(3000, 250)
+)
+
+# Run chromVAR! 
+proj_integration <- addMotifAnnotations(
+  proj_integration,
+  motifSet = "JASPAR2020",
+  name = "Motif",
+  collection = "CORE",
+  tax_group = "vertebrates",
+  force = T
+  )
+
+proj_integration <- addBgdPeaks(proj_integration, method = "ArchR", force = T)
+
+proj_integration <- addDeviationsMatrix(
+  ArchRProj = proj_integration, binarize = T,
+  peakAnnotation = "Motif",
+  force = T, out = "z")
+```
+
+```{r}
+proj_integration <- addIterativeLSI(
+  proj_integration,
+  useMatrix = "PeakMatrix",
+  iterations = 3,
+  varFeatures = 30000,
+  clusterParams = list(resolution = c(2),
+    sampleCells = 10000,
+    maxClusters = 10, n.start = 10),
+  UMAPParams = list(n_neighbors = 40, min_dist = 0.22,
+    metric = "cosine", verbose =FALSE,
+    fast_sgd = TRUE, repulsion_strength = 1.25),
+  force = T)
+
+proj_integration <- addUMAP(
+    ArchRProj = proj_integration, 
+    reducedDims = "IterativeLSI",
+    dimsToUse = c(1:30),
+    name = "UMAP", 
+    nNeighbors = 30, 
+    minDist = 0.22, 
+    spread = 0.8,
+    metric = "cosine",
+    force = T,
+    n_components = 2,
+    saveModel = F,
+    repulsion_strength = 1.2)
+
+proj_integration <- addUMAP(
+    ArchRProj = proj_integration, 
+    reducedDims = "IterativeLSI",
+    dimsToUse = c(1:30),
+    name = "UMAP_3d", 
+    nNeighbors = 30, 
+    minDist = 0.22, 
+    spread = 0.8,
+    metric = "cosine",
+    force = T,
+    n_components = 3,
+    saveModel = F,
+    repulsion_strength = 1.2)
+
+proj_integration <- addClusters(
+    input = proj_integration,
+    reducedDims = "IterativeLSI",
+    method = "Seurat",
+    name = "Clusters",
+    dimsToUse = c(1:30),
+    resolution = 0.38,
+    knnAssign = 30,
+    nOutlier = 20,
+    n.iter = 20,
+    force = T)
+
+# 2D
+p1 <- plotEmbedding(ArchRProj = proj_integration, colorBy = "cellColData", name = "Sample", embedding = "UMAP", size = 1, baseSize = 14)
+p1
+
+# 3D
+df_3d <- getEmbedding(proj_integration, embedding = "UMAP_3d", returnDF = TRUE)
+colnames(df_3d) <- c("UMAP_1","UMAP_2","UMAP_3")
+df_3d$Sample <- proj_integration$Sample
+df_3d$SeuratClusters <- proj_integration$Clusters
+df_3d$Pseudotime <- proj_integration$hour_adj_pseudotime
+
+p1_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Sample, size = I(14)) %>% add_markers()
+p2_3d <- plot_ly(df_3d, x = ~UMAP_1, y = ~UMAP_2, z = ~UMAP_3, color = ~Pseudotime, size = I(10)) %>% add_markers()
+
+
+p2 <- plotEmbedding(ArchRProj = proj_integration, colorBy = "cellColData", name = "Clusters", embedding = "UMAP", size = 1, baseSize = 14)
+p2
+
+cowplot::plot_grid(p1 + p2)
+```
