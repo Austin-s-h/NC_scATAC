@@ -16,9 +16,21 @@ suppressPackageStartupMessages({
   library(Seurat)
   library(Signac)
   library(ggplot2)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(Biostrings)
 })
 
+ah <- AnnotationHub()
+qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
+EnsDb_gg6 <- ah[["AH67945"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+```
+
+```{r}
 seurat_list <- list()
+bins <- tileGenome(seqlengths = seqlengths(EnsDb_gg6), tilewidth = 500)
 
 for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
@@ -32,15 +44,23 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
   print(paste0("Creating fragment object with ", length(barcode_names), " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  # First call peaks on the dataset
-  # If you already have a set of peaks you can skip this step
-  peaks <- CallPeaks(frags, macs2.path = "/home/vscode/.local/bin/macs2", effective.genome.size = 1e+09)
-  # Quantify fragments in each peak
-  counts <- FeatureMatrix(fragments = frags, features = peaks, cells = barcode_names)
-  # Create a Seurat object
-  seurat_obj <- CreateSeuratObject(counts = counts, project = paste0(s), meta.data = metadata)
-    # Add the Seurat object to the list
-  seurat_list[[s]] <- seurat_obj
+  counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  # Create a chromatin object
+  assay <- CreateChromatinAssay(counts = counts,
+    min.features = 1000,
+    ranges = bins,
+    fragments = frags,
+    annotation = annotations,
+    genome = seqinfo(EnsDb_gg6)
+  )
+  seurat <- CreateSeuratObject(
+    counts = assay,
+    assay = "500_bins",
+    project = paste0(s, "_ATAC"),
+    meta.data = metadata
+  )
+  # Add the Seurat object to the list
+  seurat_list[[s]] <- seurat
 }
 
 # Add in the additional HH6_NPB and HH18_SORT cells atac signal from multiome
@@ -52,24 +72,133 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
   barcode_names <- read.csv(file = input_csv_file, header = FALSE)
   barcode_names <- barcode_names[,1]
-  print(paste0("Creating fragment object with ", length(barcode_names), " cells. (Prefiltered from 10X Genomics)"))
+  print(paste0("Creating fragment object with ", length(barcode_names),
+    " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  # First call peaks on the dataset
-  # If you already have a set of peaks you can skip this step
-  peaks <- CallPeaks(frags, macs2.path = "/home/vscode/.local/bin/macs2", effective.genome.size = 1e+09)
-  # Quantify fragments in each peak
-  counts <- FeatureMatrix(fragments = frags, features = peaks, cells = barcode_names)
-  # Create a Seurat object
-  seurat_obj <- CreateSeuratObject(counts = counts, project = paste0(s))
-    # Add the Seurat object to the list
-  seurat_list[[s]] <- seurat_obj
+  counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  # Create a Chromatin assay
+  assay <- CreateChromatinAssay(counts = counts,
+    min.features = 1000,
+    ranges = bins,
+    fragments = frags,
+    annotation = annotations,
+    genome = seqinfo(EnsDb_gg6)
+  )
+  seurat <- CreateSeuratObject(
+    counts = assay,
+    assay = "500_bins",
+    project = paste0(s, "_ATAC"),
+    meta.data = metadata
+  )
+  # Add the Seurat object to the list
+  seurat_list[[s]] <- seurat
 }
 
-saveRDS(seurat_list, file = "data/seurat_list.rds", compress = FALSE)
+saveRDS(seurat_list, file = "data/seurat_list_2.rds", compress = FALSE)
 ```
 
 Probably want to re-call peaks across the entire dataset after integration?
+```{r}
+seurat_list <- readRDS(file = "data/seurat_list.rds")
 
+# Previously used first pass QC metrics
+# "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH18_SORT"
+for (s in c("HH6")) {
+  seurat_obj <- seurat_list[[s]]
+  # seurat_obj <- NucleosomeSignal(seurat_obj)
+  # seurat_obj$nucleosome_group <- ifelse(seurat_obj$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+  # FragmentHistogram(object = seurat_obj, group.by = 'nucleosome_group', region = '1-1-100000')
+  seurat_obj <- TSSEnrichment(seurat_obj, fast = FALSE)
+  seurat_obj$high.tss <- ifelse(seurat_obj$TSS.enrichment > 2, 'High', 'Low')
+  TSSPlot(seurat_obj, group.by = 'high.tss') + NoLegend()
+  
+  VlnPlot(
+    object = seurat_obj,
+    features = c('pct_reads_in_peaks', 'peak_region_fragments',
+                 'TSS.enrichment', 'nucleosome_signal'),
+    pt.size = 0.1,
+    ncol = 5
+  )
+
+  # seurat_obj <- subset(
+  #   x = seurat_obj,
+  #   subset = peak_region_fragments > 1250 &
+  #     peak_region_fragments < 100000 &
+  #     pct_reads_in_peaks > 40 &
+  #     nucleosome_signal < 4 &
+  #     TSS.enrichment > 2
+  # )
+  # seurat_list[[s]] <- seurat_obj
+}
+
+seurat <- NucleosomeSignal(seurat)
+
+seurat$nucleosome_group <- ifelse(seurat$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+FragmentHistogram(object = seurat, group.by = 'nucleosome_group', region = '1-1-100000')
+
+seurat <- TSSEnrichment(seurat, fast = FALSE)
+
+seurat$high.tss <- ifelse(seurat$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(seurat, group.by = 'high.tss') + NoLegend()
+
+seurat$pct_reads_in_peaks <- seurat$peak_region_fragments / seurat$passed_filters * 100
+
+VlnPlot(
+  object = seurat,
+  features = c('pct_reads_in_peaks', 'peak_region_fragments',
+               'TSS.enrichment', 'nucleosome_signal'),
+  pt.size = 0.1,
+  ncol = 5
+)
+
+seurat <- subset(
+  x = seurat,
+  subset = peak_region_fragments > 1250 &
+    peak_region_fragments < 100000 &
+    pct_reads_in_peaks > 40 &
+    nucleosome_signal < 4 &
+    TSS.enrichment > 2
+)
+
+# Normalization and Clustering
+seurat <- BinarizeCounts(seurat)
+seurat <- RunTFIDF(seurat)
+seurat <- FindTopFeatures(seurat, min.cutoff = 'q20')
+seurat <- RunSVD(object = seurat)
+DepthCor(seurat)
+
+seurat <- RunUMAP(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+seurat <- FindNeighbors(
+  object = seurat,
+  reduction = 'lsi',
+  dims = 2:30
+)
+seurat <- FindClusters(
+  object = seurat,
+  algorithm = 2,
+  resolution = 0.5,
+  verbose = FALSE
+)
+
+
+DimPlot(object = seurat, label = TRUE, reduction = "umap") + NoLegend()
+
+# Call peaks with new CallPeaks Signac Function
+peaks <- CallPeaks(seurat,
+                   group.by = "seurat_clusters",
+                   macs2.path = "/home/ash274/miniconda3/envs/macs3/bin/macs3",
+                   effective.genome.size = 1218492533,
+                   outdir = paste0(dir,"macs3"),
+                   extsize = 73, shift = 37,
+                   additional.args = "--nomodel",
+                   cleanup = F,
+                   name = libraries[count])
+saveRDS(peaks, file = paste0(dir, "macs3/", libraries[count],"_combined_peaks.RDS"))
+```
 ```{r}
 # Normalize the data
 seurat_list <- lapply(seurat_list, function(x) {
