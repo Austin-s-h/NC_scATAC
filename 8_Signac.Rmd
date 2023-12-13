@@ -20,7 +20,7 @@ suppressPackageStartupMessages({
   library(ensembldb)
   library(Biostrings)
 })
-
+plan("multicore", workers = 48)
 ah <- AnnotationHub()
 qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
 EnsDb_gg6 <- ah[["AH67945"]]
@@ -30,7 +30,7 @@ annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
 
 ```{r}
 seurat_list <- list()
-bins <- tileGenome(seqlengths = seqlengths(EnsDb_gg6), tilewidth = 500)
+bins <- unlist(tileGenome(seqlengths = seqlengths(EnsDb_gg6), tilewidth = 5000))
 
 for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
@@ -44,18 +44,24 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
   print(paste0("Creating fragment object with ", length(barcode_names), " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
+    verbose = TRUE)
+  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  remaining_bins <- bins[bins %over% count_name_gr]
+  print(head(counts))
   # Create a chromatin object
   assay <- CreateChromatinAssay(counts = counts,
     min.features = 1000,
-    ranges = bins,
+    ranges = remaining_bins,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
   seurat <- CreateSeuratObject(
     counts = assay,
-    assay = "500_bins",
+    assay = "5000_bins",
     project = paste0(s, "_ATAC"),
     meta.data = metadata
   )
@@ -75,20 +81,24 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
   print(paste0("Creating fragment object with ", length(barcode_names),
     " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
+    verbose = TRUE)
+  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  remaining_bins <- bins[bins %over% count_name_gr]
   # Create a Chromatin assay
   assay <- CreateChromatinAssay(counts = counts,
     min.features = 1000,
-    ranges = bins,
+    ranges = remaining_bins,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
   seurat <- CreateSeuratObject(
     counts = assay,
-    assay = "500_bins",
+    assay = "5000_bins",
     project = paste0(s, "_ATAC"),
-    meta.data = metadata
   )
   # Add the Seurat object to the list
   seurat_list[[s]] <- seurat
