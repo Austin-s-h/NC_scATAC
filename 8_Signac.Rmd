@@ -1,10 +1,18 @@
+Creating Seurat objects from existing scATAC-Seq with 10X Genomics data
+-----------------------------------------------------------------------
+
+# FILEPATH: /workspaces/NC_scATAC/8_Signac.Rmd
+
+This section of code creates 5000 bp bin count matrices for the original pass of 10X Genomics scATAC-Seq data.
+It also incorporates the additional HH6_NPB and HH18_SORT cells ATAC signal from new multiome.
+The data then undergoes a first, less stringent, pass of quality control (QC) and filtering. 
+Peaks are called per-sample using MACS2. NOTE, a sensitivity analysis of this vs. calling by cluster in the final 
+integrated data is needed.
 
 ```{r}
 library(renv)
 renv::activate()
 # install.packages("SeuratObject")
-# devtools::install_github("stuart-lab/signac", ref = "1.12.0")
-# apparently TSS bug is fixed in development version
 # remotes::install_github("stuart-lab/signac", ref = "develop")
 # install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
 
@@ -16,7 +24,7 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(JASPAR2020)
   library(Seurat) # 5
-  library(Signac)
+  library(Signac) # develop >1.12.0
   library(ggplot2)
   library(AnnotationHub)
   library(ensembldb)
@@ -32,6 +40,9 @@ EnsDb_gg6 <- ah[["AH67945"]]
 annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
 ```
 
+
+## Create Seurat objects from 10X Genomics scATAC-Seq data
+
 ```{r}
 seurat_list <- list()
 bins <- unlist(tileGenome(seqlengths = seqlengths(EnsDb_gg6), tilewidth = 5000))
@@ -46,7 +57,8 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   print(paste0("Creating Seurat object from", nrow(metadata), " unfiltered cells cells."))
   # Create a fragment object
   barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
-  print(paste0("Creating fragment object with ", length(barcode_names), " cells. (Prefiltered from 10X Genomics)"))
+  print(paste0("Creating fragment object with ", length(barcode_names),
+  " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
   # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
   counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
@@ -107,18 +119,8 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
 saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
 ```
 
-```{r}
-# fpath <- system.file("extdata", "fragments.tsv.gz", package="Signac")
-# Fragments(atac_small) <- NULL
-# Fragments(atac_small) <- CreateFragmentObject(
-#   path = fpath,
-#   cells = colnames(atac_small),
-#   tolerance = 0.5
-# )
-# atac_small <- TSSEnrichment(atac_small, fast = FALSE)
-```
+## QC and filtering
 
-Probably want to re-call peaks across the entire dataset after integration?
 ```{r}
 options(future.globals.maxSize = 20 * 1024 ^ 3)  # set to 20 Gb
 seurat_list <- readRDS(file = "data/seurat_list_3.rds")
@@ -185,7 +187,7 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
   if (!dir.exists(outdir)) {
     dir.create(outdir, recursive = TRUE)
   }
-  # grouping by timepoint only
+  # grouping by timepoint (sample) only
   peaks <- CallPeaks(seurat_obj,
                      group.by = NULL,
                      macs2.path = "/home/vscode/.local/bin/macs2",
@@ -204,52 +206,112 @@ saveRDS(seurat_list, file = "data/seurat_list_4.rds", compress = FALSE)
 ```
 
 
-
+## Merge peaks
 
 ```{r}
-# Normalize the data
-seurat_list <- lapply(seurat_list, function(x) {
-  NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
-})
+# combine peaks
+peaks_list <- list()
+for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH18_SORT")) {
+  peaks <- readRDS(file = paste0("export/peaks/", s, "_macs2/peaks.rds"))
+  peaks_list[[s]] <- peaks
+}
 
-# Find variable features
-seurat_list <- lapply(seurat_list, function(x) {
-  FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
-})
+# Create a unified set of peaks to quantify in each dataset
+combined.peaks <- GenomicRanges::reduce(
+  x = c(
+    peaks_list[["HH6"]],
+    peaks_list[["HH8"]],
+    peaks_list[["HH10"]],
+    peaks_list[["HH12"]],
+    peaks_list[["HH14"]],
+    peaks_list[["HH16"]],
+    peaks_list[["HH18"]]
+  )
+)
 
-# Identify anchors+
-anchors <- FindIntegrationAnchors(object.list = seurat_list, dims = 1:30)
-
-# Integrate the data
-integrated <- IntegrateData(anchorset = anchors, dims = 1:30)
+# Filter out bad peaks based on length
+peakwidths <- width(combined.peaks)
+combined.peaks <- combined.peaks[peakwidths  < 10000 & peakwidths > 20]
+combined.peaks
+combined.peaks <- combined.peaks[!duplicated(combined.peaks), ]
+saveRDS(combined.peaks, file = "export/peaks/combined_5000b_peakset_gr.rds", 
+  compress = FALSE)
 ```
 
+## Quantify on combined peakset
+
 ```{r}
-# Compute metrics
-seurat_obj <- PercentageFeatureSet(seurat_obj, pattern = "^MT", col.name = "percent.mt")
+seurat_list <- readRDS(file = "data/seurat_list_4.rds")
+combined.peaks <- readRDS(file = "export/peaks/combined_5000b_peakset_gr.rds")
 
-# Normalize the data
-seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
+  prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
+  fragpath <- c(paste0(prefix, s, "/", s, "_fragments.tsv.gz"))
+  input_csv_file <- c(paste0(prefix, s, "/", s, "_singlecell.csv"))
+  # Load data
+  print(paste0("Reading ", fragpath, " and ", input_csv_file))
+  metadata <- read.csv(file = input_csv_file, header = TRUE, row.names = 1)
+  print(paste0("Creating Seurat object from", nrow(metadata), " unfiltered cells cells."))
+  # Create a fragment object
+  barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
+  print(paste0("Creating fragment object with ", length(barcode_names),
+  " cells. (Prefiltered from 10X Genomics)"))
+  frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
+  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
+    verbose = TRUE)
+  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  # Create a chromatin object
+  assay <- CreateChromatinAssay(counts = counts,
+    min.features = 1000,
+    ranges = count_name_gr,
+    fragments = frags,
+    annotation = annotations,
+    genome = seqinfo(EnsDb_gg6)
+  )
+  seurat <- CreateSeuratObject(
+    counts = assay,
+    assay = "bins5000",
+    project = paste0(s, "_ATAC"),
+    meta.data = metadata
+  )
+  # Add the Seurat object to the list
+  seurat_list[[s]] <- seurat
+}
 
-# Find variable features
-seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000)
+# Add in the additional HH6_NPB and HH18_SORT cells atac signal from multiome
+for (s in c("HH6_NPB", "HH18_SORT")) {
+  prefix <- c(paste0(s, "_Multiome_95/outs/"))
+  fragpath <- c(paste0(prefix,"atac_fragments.tsv.gz"))
+  input_csv_file <- c(paste0(prefix, "filtered_feature_bc_matrix/barcodes.tsv.gz"))
+  # Load data
+  print(paste0("Reading ", fragpath, " and ", input_csv_file))
+  barcode_names <- read.csv(file = input_csv_file, header = FALSE)
+  barcode_names <- barcode_names[,1]
+  print(paste0("Creating fragment object with ", length(barcode_names),
+    " cells. (Prefiltered from 10X Genomics)"))
+  frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
+  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
+  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
+    verbose = TRUE)
+  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  # Create a Chromatin assay
+  assay <- CreateChromatinAssay(counts = counts,
+    ranges = count_name_gr,
+    fragments = frags,
+    annotation = annotations,
+    genome = seqinfo(EnsDb_gg6)
+  )
+  seurat <- CreateSeuratObject(
+    counts = assay,
+    assay = "bins5000",
+    project = paste0(s, "_ATAC"),
+  )
+  # Add the Seurat object to the list
+  seurat_list[[s]] <- seurat
+}
 
-# Scale the data
-all.genes <- rownames(seurat_obj)
-seurat_obj <- ScaleData(seurat_obj, features = all.genes)
-
-# Perform linear dimensional reduction
-seurat_obj <- RunPCA(seurat_obj, features = VariableFeatures(object = seurat_obj))
-
-# Cluster the cells
-seurat_obj <- FindNeighbors(seurat_obj, dims = 1:10)
-seurat_obj <- FindClusters(seurat_obj, resolution = 0.5)
-
-# Run non-linear dimensional reduction (UMAP/tSNE)
-seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
-seurat_obj <- RunTSNE(seurat_obj, dims = 1:10)
-
-# Visualize the data
-DimPlot(seurat_obj, reduction = "umap")
-DimPlot(seurat_obj, reduction = "tsne")
+saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
 ```
