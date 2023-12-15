@@ -217,7 +217,7 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
 }
 
 # Create a unified set of peaks to quantify in each dataset
-combined.peaks <- GenomicRanges::reduce(
+combined_peaks <- GenomicRanges::reduce(
   x = c(
     peaks_list[["HH6"]],
     peaks_list[["HH8"]],
@@ -230,11 +230,11 @@ combined.peaks <- GenomicRanges::reduce(
 )
 
 # Filter out bad peaks based on length
-peakwidths <- width(combined.peaks)
-combined.peaks <- combined.peaks[peakwidths  < 10000 & peakwidths > 20]
-combined.peaks
-combined.peaks <- combined.peaks[!duplicated(combined.peaks), ]
-saveRDS(combined.peaks, file = "export/peaks/combined_5000b_peakset_gr.rds", 
+peakwidths <- width(combined_peaks)
+combined_peaks <- combined_peaks[peakwidths  < 10000 & peakwidths > 20]
+combined_peaks
+combined_peaks <- combined_peaks[!duplicated(combined_peaks), ]
+saveRDS(combined_peaks, file = "export/peaks/combined_5000b_peakset_gr.rds", 
   compress = FALSE)
 ```
 
@@ -242,7 +242,7 @@ saveRDS(combined.peaks, file = "export/peaks/combined_5000b_peakset_gr.rds",
 
 ```{r}
 seurat_list <- readRDS(file = "data/seurat_list_4.rds")
-combined.peaks <- readRDS(file = "export/peaks/combined_5000b_peakset_gr.rds")
+combined_peaks <- readRDS(file = "export/peaks/combined_5000b_peakset_gr.rds")
 
 for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
@@ -257,15 +257,11 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   print(paste0("Creating fragment object with ", length(barcode_names),
   " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
-  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
-    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
-    verbose = TRUE)
-  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, cells = barcode_names)
   # Create a chromatin object
   assay <- CreateChromatinAssay(counts = counts,
     min.features = 1000,
-    ranges = count_name_gr,
+    ranges = combined_peaks,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
@@ -293,13 +289,10 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
     " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
   # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
-  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
-    cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
-    verbose = TRUE)
-  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, cells = barcode_names)
   # Create a Chromatin assay
   assay <- CreateChromatinAssay(counts = counts,
-    ranges = count_name_gr,
+    ranges = combined_peaks,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
@@ -313,5 +306,24 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
   seurat_list[[s]] <- seurat
 }
 
-saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
+saveRDS(seurat_list, file = "data/seurat_list_5.rds", compress = FALSE)
+```
+
+
+## Performing integration
+
+```{r}
+# add information to identify dataset of origin
+pbmc500$dataset <- 'pbmc500'
+pbmc1k$dataset <- 'pbmc1k'
+pbmc5k$dataset <- 'pbmc5k'
+pbmc10k$dataset <- 'pbmc10k'
+
+# merge all datasets, adding a cell ID to make sure cell names are unique
+combined <- merge(
+  x = pbmc500,
+  y = list(pbmc1k, pbmc5k, pbmc10k),
+  add.cell.ids = c("500", "1k", "5k", "10k")
+)
+combined[["ATAC"]]
 ```
