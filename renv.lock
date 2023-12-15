@@ -25,6 +25,14 @@
       {
         "Name": "CRAN",
         "URL": "https://cloud.r-project.org"
+      },
+      {
+        "Name": "V1",
+        "URL": "https://satijalab.r-universe.dev"
+      },
+      {
+        "Name": "V2",
+        "URL": "https://bnprks.r-universe.dev"
       }
     ]
   },
@@ -806,6 +814,19 @@
       ],
       "Hash": "207c90cd5438a1f596da2cd54c606fee"
     },
+    "RSpectra": {
+      "Package": "RSpectra",
+      "Version": "0.16-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "Rcpp",
+        "RcppEigen"
+      ],
+      "Hash": "6b5ab997fd5ff6d46a5f1d9f8b76961c"
+    },
     "Rcpp": {
       "Package": "Rcpp",
       "Version": "1.0.11",
@@ -855,6 +876,17 @@
         "utils"
       ],
       "Hash": "acb0a5bf38490f26ab8661b467f4f53a"
+    },
+    "RcppHNSW": {
+      "Package": "RcppHNSW",
+      "Version": "0.5.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "Rcpp",
+        "methods"
+      ],
+      "Hash": "6af2d9ed44e0281f6ae77eb6bed7a3c9"
     },
     "RcppProgress": {
       "Package": "RcppProgress",
@@ -953,7 +985,7 @@
     },
     "Seurat": {
       "Package": "Seurat",
-      "Version": "4.3.0.1",
+      "Version": "5.0.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -964,17 +996,21 @@
         "RANN",
         "RColorBrewer",
         "ROCR",
+        "RSpectra",
         "Rcpp",
         "RcppAnnoy",
         "RcppEigen",
+        "RcppHNSW",
         "RcppProgress",
         "Rtsne",
         "SeuratObject",
         "cluster",
         "cowplot",
+        "fastDummies",
         "fitdistrplus",
         "future",
         "future.apply",
+        "generics",
         "ggplot2",
         "ggrepel",
         "ggridges",
@@ -987,6 +1023,7 @@
         "irlba",
         "jsonlite",
         "leiden",
+        "lifecycle",
         "lmtest",
         "matrixStats",
         "methods",
@@ -996,6 +1033,7 @@
         "plotly",
         "png",
         "progressr",
+        "purrr",
         "reticulate",
         "rlang",
         "scales",
@@ -1010,7 +1048,7 @@
         "utils",
         "uwot"
       ],
-      "Hash": "54518b4c3db3d3f6217b96a4afd2fe52"
+      "Hash": "7529b4701d0ad499db7bbf4e6934aed0"
     },
     "SeuratObject": {
       "Package": "SeuratObject",
@@ -1041,14 +1079,14 @@
     },
     "Signac": {
       "Package": "Signac",
-      "Version": "1.12.0",
+      "Version": "1.12.9001",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "signac",
       "RemoteUsername": "stuart-lab",
-      "RemoteRef": "1.12.0",
-      "RemoteSha": "8ecdde291676102bb3b503f48926c993354b5471",
+      "RemoteRef": "develop",
+      "RemoteSha": "b8ee6d22fb6045d1995d5aa0408f4ab390e3198f",
       "Requirements": [
         "BiocGenerics",
         "GenomeInfoDb",
@@ -1082,7 +1120,7 @@
         "utils",
         "vctrs"
       ],
-      "Hash": "9a1f5f60a0637c85b0c2d1f1787a6682"
+      "Hash": "f5f52213465d5e7c62084aac6e14df13"
     },
     "SingleCellExperiment": {
       "Package": "SingleCellExperiment",
@@ -1901,6 +1939,19 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "8106d78941f34855c440ddb946b8f7a5"
+    },
+    "fastDummies": {
+      "Package": "fastDummies",
+      "Version": "1.7.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "data.table",
+        "stringr",
+        "tibble"
+      ],
+      "Hash": "e0f9c0c051e0e8d89996d7f0c400539f"
     },
     "fastmap": {
       "Package": "fastmap",
@@ -3046,13 +3097,8 @@
     "presto": {
       "Package": "presto",
       "Version": "1.0.0",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteUsername": "immunogenomics",
-      "RemoteRepo": "presto",
-      "RemoteRef": "master",
-      "RemoteSha": "31dc97fed5e2e7fc323ae4af62f72181cc51d9a3",
+      "Source": "Bioconductor",
+      "Repository": "https://satijalab.r-universe.dev",
       "Requirements": [
         "Matrix",
         "R",
@@ -3068,7 +3114,7 @@
         "tidyr",
         "utils"
       ],
-      "Hash": "fac5c65845cf95c995a3928de2f7ef09"
+      "Hash": "98a22e09113c35b5e9ae82a34e1325ac"
     },
     "prettyunits": {
       "Package": "prettyunits",
@@ -3564,7 +3610,7 @@
     },
     "sctransform": {
       "Package": "sctransform",
-      "Version": "0.3.5",
+      "Version": "0.4.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -3584,7 +3630,7 @@
         "reshape2",
         "rlang"
       ],
-      "Hash": "e70cffc72eb877eb06e86a20097e93af"
+      "Hash": "0242402f321be0246fb67cf8c63b3572"
     },
     "segmented": {
       "Package": "segmented",

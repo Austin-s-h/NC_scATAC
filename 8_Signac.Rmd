@@ -120,7 +120,7 @@ saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
 
 Probably want to re-call peaks across the entire dataset after integration?
 ```{r}
-options(future.globals.maxSize = 10 * 1024 ^ 3)  # set to 10 Gb
+options(future.globals.maxSize = 20 * 1024 ^ 3)  # set to 20 Gb
 seurat_list <- readRDS(file = "data/seurat_list_3.rds")
 
 # Previously used first pass QC metrics
@@ -179,18 +179,22 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
     subset = nFeature_bins5000 > 1250 &
       nFeature_bins5000 < 100000 &
       nucleosome_signal < 4 &
-      TSS.enrichment > 2,
-      high.tss = "High"
+      TSS.enrichment > 2
   )
+  outdir <- paste0("export/peaks/", s, "_macs2")
+  if (!dir.exists(outdir)) {
+    dir.create(outdir, recursive = TRUE)
+  }
+  # grouping by timepoint only
   peaks <- CallPeaks(seurat_obj,
-                    group.by = "seurat_clusters",
-                    macs2.path = "/home/vscode/.local/bin/macs2",
-                    effective.genome.size = 1218492533,
-                    outdir = paste0("export/peaks/",s,"_macs2"),
-                    extsize = 73, shift = 37,
-                    additional.args = "--nomodel",
-                    cleanup = FALSE,
-                    name = paste0(s, "prefiltered_macs2")
+                     group.by = NULL,
+                     macs2.path = "/home/vscode/.local/bin/macs2",
+                     effective.genome.size = 1218492533,
+                     outdir = paste0("export/peaks/", s, "_macs2"),
+                     extsize = 73, shift = 37,
+                     additional.args = "--nomodel",
+                     cleanup = FALSE,
+                     name = paste0(s, "prefiltered_macs2"))
   saveRDS(peaks, file = paste0("export/peaks/",s,"_macs2/peaks.rds"), compress = FALSE)
 
   seurat_list[[s]] <- seurat_obj

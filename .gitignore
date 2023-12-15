@@ -66,3 +66,5 @@ NC_ATAC_Integration/*
 *.h5
 HH6_NPB_Multiome_95/*
 HH18_SORT_Multiome_95/*
+export/*
+Plots/*
