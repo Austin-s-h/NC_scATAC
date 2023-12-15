@@ -241,39 +241,40 @@ saveRDS(combined_peaks, file = "export/peaks/combined_5000b_peakset_gr.rds",
 ## Quantify on combined peakset
 
 ```{r}
+# Make sure to activate env fully
 seurat_list <- readRDS(file = "data/seurat_list_4.rds")
 combined_peaks <- readRDS(file = "export/peaks/combined_5000b_peakset_gr.rds")
-
+seurat_list_2 <- list()
 for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   prefix <- "data/10xscATAC_Lane1_Lane2_outs/"
+  # Instead of using metadata, use the prefiltered cells from the previous step
+  barcode_names <- rownames(seurat_list[[s]]@meta.data)
   fragpath <- c(paste0(prefix, s, "/", s, "_fragments.tsv.gz"))
   input_csv_file <- c(paste0(prefix, s, "/", s, "_singlecell.csv"))
   # Load data
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
   metadata <- read.csv(file = input_csv_file, header = TRUE, row.names = 1)
-  print(paste0("Creating Seurat object from", nrow(metadata), " unfiltered cells cells."))
+  print(paste0("Creating Seurat object from", nrow(metadata), 
+    " unfiltered cells cells. After 5000 bin QC, there are ", 
+    length(barcode_names), "cells remaining."))
   # Create a fragment object
-  barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
-  print(paste0("Creating fragment object with ", length(barcode_names),
-  " cells. (Prefiltered from 10X Genomics)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, cells = barcode_names)
+  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, 
+    cells = barcode_names)
   # Create a chromatin object
   assay <- CreateChromatinAssay(counts = counts,
-    min.features = 1000,
     ranges = combined_peaks,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
-  seurat <- CreateSeuratObject(
+  seurat_obj <- CreateSeuratObject(
     counts = assay,
-    assay = "bins5000",
+    assay = "peaks",
     project = paste0(s, "_ATAC"),
     meta.data = metadata
   )
-  # Add the Seurat object to the list
-  seurat_list[[s]] <- seurat
+  seurat_list_2[[s]] <- seurat_obj
 }
 
 # Add in the additional HH6_NPB and HH18_SORT cells atac signal from multiome
@@ -283,13 +284,12 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
   input_csv_file <- c(paste0(prefix, "filtered_feature_bc_matrix/barcodes.tsv.gz"))
   # Load data
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
-  barcode_names <- read.csv(file = input_csv_file, header = FALSE)
-  barcode_names <- barcode_names[,1]
+  barcode_names <- rownames(seurat_list[[s]]@meta.data)
   print(paste0("Creating fragment object with ", length(barcode_names),
-    " cells. (Prefiltered from 10X Genomics)"))
+    " cells. (Remaining after 5000 bin QC)"))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, cells = barcode_names)
+  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, 
+    cells = barcode_names)
   # Create a Chromatin assay
   assay <- CreateChromatinAssay(counts = counts,
     ranges = combined_peaks,
@@ -297,33 +297,72 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
-  seurat <- CreateSeuratObject(
+  seurat_obj <- CreateSeuratObject(
     counts = assay,
-    assay = "bins5000",
-    project = paste0(s, "_ATAC"),
+    assay = "peaks",
+    project = paste0(s, "_ATAC")
   )
-  # Add the Seurat object to the list
-  seurat_list[[s]] <- seurat
+  seurat_list_2[[s]] <- seurat_obj
 }
 
-saveRDS(seurat_list, file = "data/seurat_list_5.rds", compress = FALSE)
+saveRDS(seurat_list_2, file = "data/seurat_list_5.rds", compress = FALSE)
 ```
 
 
 ## Performing integration
 
 ```{r}
-# add information to identify dataset of origin
-pbmc500$dataset <- 'pbmc500'
-pbmc1k$dataset <- 'pbmc1k'
-pbmc5k$dataset <- 'pbmc5k'
-pbmc10k$dataset <- 'pbmc10k'
-
+seurat_list_2 <- readRDS(file = "data/seurat_list_5.rds")
 # merge all datasets, adding a cell ID to make sure cell names are unique
 combined <- merge(
-  x = pbmc500,
-  y = list(pbmc1k, pbmc5k, pbmc10k),
-  add.cell.ids = c("500", "1k", "5k", "10k")
+  x = seurat_list_2[["HH6"]],
+  y = list(seurat_list_2[["HH6_NPB"]], seurat_list_2[["HH8"]], 
+           seurat_list_2[["HH10"]], seurat_list_2[["HH12"]],
+           seurat_list_2[["HH14"]], seurat_list_2[["HH16"]],
+           seurat_list_2[["HH18"]], seurat_list_2[["HH18_SORT"]]),
+  add.cell.ids = c("HH6", "HH6_NPB", "HH8", "HH10", "HH12", "HH14", "HH16", 
+    "HH18", "HH18_SORT")
 )
-combined[["ATAC"]]
+```
+
+```{r}
+combined <- NucleosomeSignal(combined)
+combined$nucleosome_group <- ifelse(combined$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+FragmentHistogram(object = combined, group.by = 'nucleosome_group', region = '1-1-100000')
+combined <- TSSEnrichment(combined, fast = FALSE)
+combined$high.tss <- ifelse(combined$TSS.enrichment > 2, 'High', 'Low')
+tss <- TSSPlot(combined, group.by = 'high.tss') + NoLegend()
+ggsave(tss, filename = paste0("export/combined_QC_TSS.pdf"), width = 8, height = 8)
+vln <- VlnPlot(
+  object = combined,
+  features = c('TSS.enrichment', 'nFeature_bins5000',
+               'mitochondrial','TSS.percentile'),
+  pt.size = 0.1,
+  ncol = 5
+)
+ggsave(vln, filename = paste0("export/combined_QC_violin.pdf"), width = 12, height = 8)
+combined <- BinarizeCounts(combined)
+# remove features that are very low counts
+combined <- RunTFIDF(combined)
+combined <- FindTopFeatures(combined, min.cutoff = 'q20')
+combined <- RunSVD(object = combined)
+DepthCor(combined)
+combined <- RunUMAP(
+  object = combined,
+  reduction = 'lsi',
+  dims = 2:30, 
+)
+combined <- FindNeighbors(
+  object = combined,
+  reduction = 'lsi',
+  dims = 2:30
+)
+combined <- FindClusters(
+  object = combined,
+  algorithm = 2,
+  resolution = 0.5,
+  verbose = FALSE
+)
+umap <- DimPlot(object = combined, label = TRUE, reduction = "umap") + NoLegend()
+ggsave(umap, filename = paste0("export/", s, "combined_postfilter_UMAP.pdf"), width = 8, height = 8)
 ```
