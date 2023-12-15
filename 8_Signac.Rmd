@@ -4,6 +4,8 @@ library(renv)
 renv::activate()
 # install.packages("SeuratObject")
 # devtools::install_github("stuart-lab/signac", ref = "1.12.0")
+# apparently TSS bug is fixed in development version
+# remotes::install_github("stuart-lab/signac", ref = "develop")
 # install.packages("BSgenome.Ggallus.ENSEMBL.galGal6_1.0.3.tar.gz", repos = NULL)
 
 suppressPackageStartupMessages({
@@ -13,14 +15,16 @@ suppressPackageStartupMessages({
   library(org.Gg.eg.db)
   library(dplyr)
   library(JASPAR2020)
-  library(Seurat)
+  library(Seurat) # 5
   library(Signac)
   library(ggplot2)
   library(AnnotationHub)
   library(ensembldb)
   library(Biostrings)
+  library(Matrix) # 1.6.4
+  library(irlba)
 })
-plan("multicore", workers = 48)
+plan("multicore", workers = 24)
 ah <- AnnotationHub()
 qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
 EnsDb_gg6 <- ah[["AH67945"]]
@@ -49,19 +53,17 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
     cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
     verbose = TRUE)
   count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
-  remaining_bins <- bins[bins %over% count_name_gr]
-  print(head(counts))
   # Create a chromatin object
   assay <- CreateChromatinAssay(counts = counts,
     min.features = 1000,
-    ranges = remaining_bins,
+    ranges = count_name_gr,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
   seurat <- CreateSeuratObject(
     counts = assay,
-    assay = "5000_bins",
+    assay = "bins5000",
     project = paste0(s, "_ATAC"),
     meta.data = metadata
   )
@@ -86,129 +88,120 @@ for (s in c("HH6_NPB", "HH18_SORT")) {
     cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
     verbose = TRUE)
   count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
-  remaining_bins <- bins[bins %over% count_name_gr]
   # Create a Chromatin assay
   assay <- CreateChromatinAssay(counts = counts,
-    min.features = 1000,
-    ranges = remaining_bins,
+    ranges = count_name_gr,
     fragments = frags,
     annotation = annotations,
     genome = seqinfo(EnsDb_gg6)
   )
   seurat <- CreateSeuratObject(
     counts = assay,
-    assay = "5000_bins",
+    assay = "bins5000",
     project = paste0(s, "_ATAC"),
   )
   # Add the Seurat object to the list
   seurat_list[[s]] <- seurat
 }
 
-saveRDS(seurat_list, file = "data/seurat_list_2.rds", compress = FALSE)
+saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
+```
+
+```{r}
+# fpath <- system.file("extdata", "fragments.tsv.gz", package="Signac")
+# Fragments(atac_small) <- NULL
+# Fragments(atac_small) <- CreateFragmentObject(
+#   path = fpath,
+#   cells = colnames(atac_small),
+#   tolerance = 0.5
+# )
+# atac_small <- TSSEnrichment(atac_small, fast = FALSE)
 ```
 
 Probably want to re-call peaks across the entire dataset after integration?
 ```{r}
-seurat_list <- readRDS(file = "data/seurat_list.rds")
+options(future.globals.maxSize = 10 * 1024 ^ 3)  # set to 10 Gb
+seurat_list <- readRDS(file = "data/seurat_list_3.rds")
 
 # Previously used first pass QC metrics
 # "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH18_SORT"
-for (s in c("HH6")) {
+for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH18_SORT")) {
   seurat_obj <- seurat_list[[s]]
-  # seurat_obj <- NucleosomeSignal(seurat_obj)
-  # seurat_obj$nucleosome_group <- ifelse(seurat_obj$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
-  # FragmentHistogram(object = seurat_obj, group.by = 'nucleosome_group', region = '1-1-100000')
+  head(seurat_obj@meta.data)
+  seurat_obj <- NucleosomeSignal(seurat_obj)
+  seurat_obj$nucleosome_group <- ifelse(seurat_obj$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+  FragmentHistogram(object = seurat_obj, group.by = 'nucleosome_group', region = '1-1-100000')
   seurat_obj <- TSSEnrichment(seurat_obj, fast = FALSE)
   seurat_obj$high.tss <- ifelse(seurat_obj$TSS.enrichment > 2, 'High', 'Low')
-  TSSPlot(seurat_obj, group.by = 'high.tss') + NoLegend()
-  
-  VlnPlot(
+  tss <- TSSPlot(seurat_obj, group.by = 'high.tss') + NoLegend()
+  ggsave(tss, filename = paste0("export/", s, "_QC_TSS.pdf"), width = 8, height = 8)
+  vln <- VlnPlot(
     object = seurat_obj,
-    features = c('pct_reads_in_peaks', 'peak_region_fragments',
-                 'TSS.enrichment', 'nucleosome_signal'),
+    features = c('TSS.enrichment', 'nFeature_bins5000',
+                 'mitochondrial','TSS.percentile'),
     pt.size = 0.1,
     ncol = 5
   )
+  ggsave(vln, filename = paste0("export/", s, "_QC_violin.pdf"), width = 12, height = 8)
+  seurat_obj <- BinarizeCounts(seurat_obj)
+  # remove features that are very low counts
+  seurat_obj <- subset(
+    x = seurat_obj,
+    subset = nFeature_bins5000 > 5
+  )
+  seurat_obj <- RunTFIDF(seurat_obj)
+  seurat_obj <- FindTopFeatures(seurat_obj, min.cutoff = 'q20')
+  seurat_obj <- RunSVD(object = seurat_obj)
+  DepthCor(seurat_obj)
 
-  # seurat_obj <- subset(
-  #   x = seurat_obj,
-  #   subset = peak_region_fragments > 1250 &
-  #     peak_region_fragments < 100000 &
-  #     pct_reads_in_peaks > 40 &
-  #     nucleosome_signal < 4 &
-  #     TSS.enrichment > 2
-  # )
-  # seurat_list[[s]] <- seurat_obj
+  seurat_obj <- RunUMAP(
+    object = seurat_obj,
+    reduction = 'lsi',
+    dims = 2:30, 
+  )
+  seurat_obj <- FindNeighbors(
+    object = seurat_obj,
+    reduction = 'lsi',
+    dims = 2:30
+  )
+  seurat_obj <- FindClusters(
+    object = seurat_obj,
+    algorithm = 2,
+    resolution = 0.5,
+    verbose = FALSE
+  )
+
+
+  umap <- DimPlot(object = seurat_obj, label = TRUE, reduction = "umap") + NoLegend()
+  ggsave(umap, filename = paste0("export/", s, "pre_filter_UMAP.pdf"), width = 8, height = 8)
+  seurat_obj <- subset(
+    x = seurat_obj,
+    subset = nFeature_bins5000 > 1250 &
+      nFeature_bins5000 < 100000 &
+      nucleosome_signal < 4 &
+      TSS.enrichment > 2,
+      high.tss = "High"
+  )
+  peaks <- CallPeaks(seurat_obj,
+                    group.by = "seurat_clusters",
+                    macs2.path = "/home/vscode/.local/bin/macs2",
+                    effective.genome.size = 1218492533,
+                    outdir = paste0("export/peaks/",s,"_macs2"),
+                    extsize = 73, shift = 37,
+                    additional.args = "--nomodel",
+                    cleanup = FALSE,
+                    name = paste0(s, "prefiltered_macs2")
+  saveRDS(peaks, file = paste0("export/peaks/",s,"_macs2/peaks.rds"), compress = FALSE)
+
+  seurat_list[[s]] <- seurat_obj
 }
 
-seurat <- NucleosomeSignal(seurat)
-
-seurat$nucleosome_group <- ifelse(seurat$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
-FragmentHistogram(object = seurat, group.by = 'nucleosome_group', region = '1-1-100000')
-
-seurat <- TSSEnrichment(seurat, fast = FALSE)
-
-seurat$high.tss <- ifelse(seurat$TSS.enrichment > 2, 'High', 'Low')
-TSSPlot(seurat, group.by = 'high.tss') + NoLegend()
-
-seurat$pct_reads_in_peaks <- seurat$peak_region_fragments / seurat$passed_filters * 100
-
-VlnPlot(
-  object = seurat,
-  features = c('pct_reads_in_peaks', 'peak_region_fragments',
-               'TSS.enrichment', 'nucleosome_signal'),
-  pt.size = 0.1,
-  ncol = 5
-)
-
-seurat <- subset(
-  x = seurat,
-  subset = peak_region_fragments > 1250 &
-    peak_region_fragments < 100000 &
-    pct_reads_in_peaks > 40 &
-    nucleosome_signal < 4 &
-    TSS.enrichment > 2
-)
-
-# Normalization and Clustering
-seurat <- BinarizeCounts(seurat)
-seurat <- RunTFIDF(seurat)
-seurat <- FindTopFeatures(seurat, min.cutoff = 'q20')
-seurat <- RunSVD(object = seurat)
-DepthCor(seurat)
-
-seurat <- RunUMAP(
-  object = seurat,
-  reduction = 'lsi',
-  dims = 2:30, 
-)
-seurat <- FindNeighbors(
-  object = seurat,
-  reduction = 'lsi',
-  dims = 2:30
-)
-seurat <- FindClusters(
-  object = seurat,
-  algorithm = 2,
-  resolution = 0.5,
-  verbose = FALSE
-)
-
-
-DimPlot(object = seurat, label = TRUE, reduction = "umap") + NoLegend()
-
-# Call peaks with new CallPeaks Signac Function
-peaks <- CallPeaks(seurat,
-                   group.by = "seurat_clusters",
-                   macs2.path = "/home/ash274/miniconda3/envs/macs3/bin/macs3",
-                   effective.genome.size = 1218492533,
-                   outdir = paste0(dir,"macs3"),
-                   extsize = 73, shift = 37,
-                   additional.args = "--nomodel",
-                   cleanup = F,
-                   name = libraries[count])
-saveRDS(peaks, file = paste0(dir, "macs3/", libraries[count],"_combined_peaks.RDS"))
+saveRDS(seurat_list, file = "data/seurat_list_4.rds", compress = FALSE)
 ```
+
+
+
+
 ```{r}
 # Normalize the data
 seurat_list <- lapply(seurat_list, function(x) {
