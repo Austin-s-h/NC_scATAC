@@ -57,16 +57,21 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   print(paste0("Creating Seurat object from", nrow(metadata), " unfiltered cells cells."))
   # Create a fragment object
   barcode_names <- rownames(metadata[which(metadata$is__cell_barcode == 1), ])
-  print(paste0("Creating fragment object with ", length(barcode_names),
-  " cells. (Prefiltered from 10X Genomics)"))
+  print(paste0(
+    "Creating fragment object with ", length(barcode_names),
+    " cells. (Prefiltered from 10X Genomics)"
+  ))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
   # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
-  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+  counts <- GenomeBinMatrix(
+    fragments = frags, genome = seqinfo(EnsDb_gg6),
     cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
-    verbose = TRUE)
-  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+    verbose = TRUE
+  )
+  count_name_gr <- StringToGRanges(rownames(counts), sep = c("-", "-"))
   # Create a chromatin object
-  assay <- CreateChromatinAssay(counts = counts,
+  assay <- CreateChromatinAssay(
+    counts = counts,
     min.features = 1000,
     ranges = count_name_gr,
     fragments = frags,
@@ -86,22 +91,27 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
 # Add in the additional HH6_NPB and HH18_SORT cells atac signal from multiome
 for (s in c("HH6_NPB", "HH18_SORT")) {
   prefix <- c(paste0(s, "_Multiome_95/outs/"))
-  fragpath <- c(paste0(prefix,"atac_fragments.tsv.gz"))
+  fragpath <- c(paste0(prefix, "atac_fragments.tsv.gz"))
   input_csv_file <- c(paste0(prefix, "filtered_feature_bc_matrix/barcodes.tsv.gz"))
   # Load data
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
   barcode_names <- read.csv(file = input_csv_file, header = FALSE)
-  barcode_names <- barcode_names[,1]
-  print(paste0("Creating fragment object with ", length(barcode_names),
-    " cells. (Prefiltered from 10X Genomics)"))
+  barcode_names <- barcode_names[, 1]
+  print(paste0(
+    "Creating fragment object with ", length(barcode_names),
+    " cells. (Prefiltered from 10X Genomics)"
+  ))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
   # counts <- FeatureMatrix(fragments = frags, features = bins, cells = barcode_names)
-  counts <- GenomeBinMatrix(fragments = frags, genome = seqinfo(EnsDb_gg6),
+  counts <- GenomeBinMatrix(
+    fragments = frags, genome = seqinfo(EnsDb_gg6),
     cells = barcode_names, binsize = 5000, process_n = 2000, sep = c("-", "-"),
-    verbose = TRUE)
-  count_name_gr <-  StringToGRanges(rownames(counts), sep = c("-", "-"))
+    verbose = TRUE
+  )
+  count_name_gr <- StringToGRanges(rownames(counts), sep = c("-", "-"))
   # Create a Chromatin assay
-  assay <- CreateChromatinAssay(counts = counts,
+  assay <- CreateChromatinAssay(
+    counts = counts,
     ranges = count_name_gr,
     fragments = frags,
     annotation = annotations,
@@ -122,7 +132,7 @@ saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
 ## QC and filtering
 
 ```{r}
-options(future.globals.maxSize = 20 * 1024 ^ 3)  # set to 20 Gb
+options(future.globals.maxSize = 20 * 1024^3) # set to 20 Gb
 seurat_list <- readRDS(file = "data/seurat_list_3.rds")
 
 # Previously used first pass QC metrics
@@ -131,16 +141,18 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
   seurat_obj <- seurat_list[[s]]
   head(seurat_obj@meta.data)
   seurat_obj <- NucleosomeSignal(seurat_obj)
-  seurat_obj$nucleosome_group <- ifelse(seurat_obj$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
-  FragmentHistogram(object = seurat_obj, group.by = 'nucleosome_group', region = '1-1-100000')
+  seurat_obj$nucleosome_group <- ifelse(seurat_obj$nucleosome_signal > 4, "NS > 4", "NS < 4")
+  FragmentHistogram(object = seurat_obj, group.by = "nucleosome_group", region = "1-1-100000")
   seurat_obj <- TSSEnrichment(seurat_obj, fast = FALSE)
-  seurat_obj$high.tss <- ifelse(seurat_obj$TSS.enrichment > 2, 'High', 'Low')
-  tss <- TSSPlot(seurat_obj, group.by = 'high.tss') + NoLegend()
+  seurat_obj$high.tss <- ifelse(seurat_obj$TSS.enrichment > 2, "High", "Low")
+  tss <- TSSPlot(seurat_obj, group.by = "high.tss") + NoLegend()
   ggsave(tss, filename = paste0("export/", s, "_QC_TSS.pdf"), width = 8, height = 8)
   vln <- VlnPlot(
     object = seurat_obj,
-    features = c('TSS.enrichment', 'nFeature_bins5000',
-                 'mitochondrial','TSS.percentile'),
+    features = c(
+      "TSS.enrichment", "nFeature_bins5000",
+      "mitochondrial", "TSS.percentile"
+    ),
     pt.size = 0.1,
     ncol = 5
   )
@@ -152,18 +164,18 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
     subset = nFeature_bins5000 > 5
   )
   seurat_obj <- RunTFIDF(seurat_obj)
-  seurat_obj <- FindTopFeatures(seurat_obj, min.cutoff = 'q20')
+  seurat_obj <- FindTopFeatures(seurat_obj, min.cutoff = "q20")
   seurat_obj <- RunSVD(object = seurat_obj)
   DepthCor(seurat_obj)
 
   seurat_obj <- RunUMAP(
     object = seurat_obj,
-    reduction = 'lsi',
-    dims = 2:30, 
+    reduction = "lsi",
+    dims = 2:30,
   )
   seurat_obj <- FindNeighbors(
     object = seurat_obj,
-    reduction = 'lsi',
+    reduction = "lsi",
     dims = 2:30
   )
   seurat_obj <- FindClusters(
@@ -189,15 +201,16 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18", "HH6_NPB", "HH
   }
   # grouping by timepoint (sample) only
   peaks <- CallPeaks(seurat_obj,
-                     group.by = NULL,
-                     macs2.path = "/home/vscode/.local/bin/macs2",
-                     effective.genome.size = 1218492533,
-                     outdir = paste0("export/peaks/", s, "_macs2"),
-                     extsize = 73, shift = 37,
-                     additional.args = "--nomodel",
-                     cleanup = FALSE,
-                     name = paste0(s, "prefiltered_macs2"))
-  saveRDS(peaks, file = paste0("export/peaks/",s,"_macs2/peaks.rds"), compress = FALSE)
+    group.by = NULL,
+    macs2.path = "/home/vscode/.local/bin/macs2",
+    effective.genome.size = 1218492533,
+    outdir = paste0("export/peaks/", s, "_macs2"),
+    extsize = 73, shift = 37,
+    additional.args = "--nomodel",
+    cleanup = FALSE,
+    name = paste0(s, "prefiltered_macs2")
+  )
+  saveRDS(peaks, file = paste0("export/peaks/", s, "_macs2/peaks.rds"), compress = FALSE)
 
   seurat_list[[s]] <- seurat_obj
 }
@@ -231,11 +244,13 @@ combined_peaks <- GenomicRanges::reduce(
 
 # Filter out bad peaks based on length
 peakwidths <- width(combined_peaks)
-combined_peaks <- combined_peaks[peakwidths  < 10000 & peakwidths > 20]
+combined_peaks <- combined_peaks[peakwidths < 10000 & peakwidths > 20]
 combined_peaks
 combined_peaks <- combined_peaks[!duplicated(combined_peaks), ]
-saveRDS(combined_peaks, file = "export/peaks/combined_5000b_peakset_gr.rds", 
-  compress = FALSE)
+saveRDS(combined_peaks,
+  file = "export/peaks/combined_5000b_peakset_gr.rds",
+  compress = FALSE
+)
 ```
 
 ## Quantify on combined peakset
@@ -254,15 +269,20 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
   # Load data
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
   metadata <- read.csv(file = input_csv_file, header = TRUE, row.names = 1)
-  print(paste0("Creating Seurat object from", nrow(metadata), 
-    " unfiltered cells cells. After 5000 bin QC, there are ", 
-    length(barcode_names), "cells remaining."))
+  print(paste0(
+    "Creating Seurat object from", nrow(metadata),
+    " unfiltered cells cells. After 5000 bin QC, there are ",
+    length(barcode_names), "cells remaining."
+  ))
   # Create a fragment object
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, 
-    cells = barcode_names)
+  counts <- FeatureMatrix(
+    fragments = frags, features = combined_peaks,
+    cells = barcode_names
+  )
   # Create a chromatin object
-  assay <- CreateChromatinAssay(counts = counts,
+  assay <- CreateChromatinAssay(
+    counts = counts,
     ranges = combined_peaks,
     fragments = frags,
     annotation = annotations,
@@ -280,18 +300,23 @@ for (s in c("HH6", "HH8", "HH10", "HH12", "HH14", "HH16", "HH18")) {
 # Add in the additional HH6_NPB and HH18_SORT cells atac signal from multiome
 for (s in c("HH6_NPB", "HH18_SORT")) {
   prefix <- c(paste0(s, "_Multiome_95/outs/"))
-  fragpath <- c(paste0(prefix,"atac_fragments.tsv.gz"))
+  fragpath <- c(paste0(prefix, "atac_fragments.tsv.gz"))
   input_csv_file <- c(paste0(prefix, "filtered_feature_bc_matrix/barcodes.tsv.gz"))
   # Load data
   print(paste0("Reading ", fragpath, " and ", input_csv_file))
   barcode_names <- rownames(seurat_list[[s]]@meta.data)
-  print(paste0("Creating fragment object with ", length(barcode_names),
-    " cells. (Remaining after 5000 bin QC)"))
+  print(paste0(
+    "Creating fragment object with ", length(barcode_names),
+    " cells. (Remaining after 5000 bin QC)"
+  ))
   frags <- CreateFragmentObject(path = fragpath, cells = barcode_names)
-  counts <- FeatureMatrix(fragments = frags, features = combined_peaks, 
-    cells = barcode_names)
+  counts <- FeatureMatrix(
+    fragments = frags, features = combined_peaks,
+    cells = barcode_names
+  )
   # Create a Chromatin assay
-  assay <- CreateChromatinAssay(counts = counts,
+  assay <- CreateChromatinAssay(
+    counts = counts,
     ranges = combined_peaks,
     fragments = frags,
     annotation = annotations,
@@ -309,34 +334,53 @@ saveRDS(seurat_list_2, file = "data/seurat_list_5.rds", compress = FALSE)
 ```
 
 
-## Performing integration
+## Performing integration WORKING CHUNK
 
+This is where things start to get interesting. We finally have a single Seurat object with all of the data.
+I just need to run this again to make sure it saves.
 ```{r}
 seurat_list_2 <- readRDS(file = "data/seurat_list_5.rds")
 # merge all datasets, adding a cell ID to make sure cell names are unique
 combined <- merge(
   x = seurat_list_2[["HH6"]],
-  y = list(seurat_list_2[["HH6_NPB"]], seurat_list_2[["HH8"]], 
-           seurat_list_2[["HH10"]], seurat_list_2[["HH12"]],
-           seurat_list_2[["HH14"]], seurat_list_2[["HH16"]],
-           seurat_list_2[["HH18"]], seurat_list_2[["HH18_SORT"]]),
-  add.cell.ids = c("HH6", "HH6_NPB", "HH8", "HH10", "HH12", "HH14", "HH16", 
-    "HH18", "HH18_SORT")
+  y = list(
+    seurat_list_2[["HH6_NPB"]], seurat_list_2[["HH8"]],
+    seurat_list_2[["HH10"]], seurat_list_2[["HH12"]],
+    seurat_list_2[["HH14"]], seurat_list_2[["HH16"]],
+    seurat_list_2[["HH18"]], seurat_list_2[["HH18_SORT"]]
+  ),
+  add.cell.ids = c(
+    "HH6", "HH6_NPB", "HH8", "HH10", "HH12", "HH14", "HH16",
+    "HH18", "HH18_SORT"
+  )
 )
+combined
+# 32,999 cells quantified across 335956 peaks
+# Remove metadata that is not used/invalid
+summary(combined@meta.data)
+
+# Remove metadata columns that are not used/invalid
+combined@meta.data[, c(
+  "DNase_sensitive_region_fragments", "enhancer_region_fragments",
+  "promoter_region_fragments", "blacklist_region_fragments"
+)] <- NULL
+summary(combined@meta.data)
 ```
 
 ```{r}
 combined <- NucleosomeSignal(combined)
-combined$nucleosome_group <- ifelse(combined$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
-FragmentHistogram(object = combined, group.by = 'nucleosome_group', region = '1-1-100000')
+combined$nucleosome_group <- ifelse(combined$nucleosome_signal > 4, "NS > 4", "NS < 4")
+FragmentHistogram(object = combined, group.by = "nucleosome_group", region = "1-1-100000")
 combined <- TSSEnrichment(combined, fast = FALSE)
-combined$high.tss <- ifelse(combined$TSS.enrichment > 2, 'High', 'Low')
-tss <- TSSPlot(combined, group.by = 'high.tss') + NoLegend()
+combined$high.tss <- ifelse(combined$TSS.enrichment > 2, "High", "Low")
+tss <- TSSPlot(combined, group.by = "high.tss") + NoLegend()
 ggsave(tss, filename = paste0("export/combined_QC_TSS.pdf"), width = 8, height = 8)
 vln <- VlnPlot(
   object = combined,
-  features = c('TSS.enrichment', 'nFeature_bins5000',
-               'mitochondrial','TSS.percentile'),
+  features = c(
+    "TSS.enrichment", "nFeature_bins5000",
+    "mitochondrial", "TSS.percentile"
+  ),
   pt.size = 0.1,
   ncol = 5
 )
@@ -344,17 +388,19 @@ ggsave(vln, filename = paste0("export/combined_QC_violin.pdf"), width = 12, heig
 combined <- BinarizeCounts(combined)
 # remove features that are very low counts
 combined <- RunTFIDF(combined)
-combined <- FindTopFeatures(combined, min.cutoff = 'q20')
+combined <- FindTopFeatures(combined, min.cutoff = "q20")
 combined <- RunSVD(object = combined)
 DepthCor(combined)
+
+# Iterate here to find the best resolution
 combined <- RunUMAP(
   object = combined,
-  reduction = 'lsi',
-  dims = 2:30, 
+  reduction = "lsi",
+  dims = 2:30,
 )
 combined <- FindNeighbors(
   object = combined,
-  reduction = 'lsi',
+  reduction = "lsi",
   dims = 2:30
 )
 combined <- FindClusters(
@@ -364,5 +410,15 @@ combined <- FindClusters(
   verbose = FALSE
 )
 umap <- DimPlot(object = combined, label = TRUE, reduction = "umap") + NoLegend()
-ggsave(umap, filename = paste0("export/", s, "combined_postfilter_UMAP.pdf"), width = 8, height = 8)
+ggsave(umap, filename = paste0("export/combined_postfilter_peak_lsi_clusters0.5_UMAP.pdf"), width = 8, height = 8)
+```
+
+```{r}
+umap <- DimPlot(object = combined, label = TRUE, group.by = "orig.ident", reduction = "umap") + NoLegend()
+ggsave(umap, filename = paste0("export/combined_postfilter_peak_lsi_2_orig.ident_UMAP.pdf"), width = 8, height = 8)
+```
+  
+  
+```{r}
+saveRDS(combined, file = "data/combined_seurat_obj.rds", compress = FALSE)
 ```
