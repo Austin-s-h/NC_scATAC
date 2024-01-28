@@ -32,7 +32,8 @@ suppressPackageStartupMessages({
   library(Matrix) # 1.6.4
   library(irlba)
 })
-plan("multicore", workers = 24)
+options(future.globals.maxSize = 20 * 1024^3) # set to 20 Gb for sparse -> dense matrix conversion
+plan("multicore", workers = 18)
 ah <- AnnotationHub()
 qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
 EnsDb_gg6 <- ah[["AH67945"]]
@@ -132,7 +133,6 @@ saveRDS(seurat_list, file = "data/seurat_list_3.rds", compress = FALSE)
 ## QC and filtering
 
 ```{r}
-options(future.globals.maxSize = 20 * 1024^3) # set to 20 Gb
 seurat_list <- readRDS(file = "data/seurat_list_3.rds")
 
 # Previously used first pass QC metrics
@@ -241,13 +241,21 @@ combined_peaks <- GenomicRanges::reduce(
     peaks_list[["HH18"]]
   )
 )
+# filter seqinfo to only contain chromosomes from trimmed_peaks
+chromosomes <- levels(seqnames(combined_peaks))
+seq_info <- seqinfo(BSgenome.Ggallus.ENSEMBL.galGal6)[chromosomes]
+seqinfo(combined_peaks) <- seq_info
+trimmed_peaks <- trim(combined_peaks)
+summary(combined_peaks %in% trimmed_peaks)
+
+## BUG??? TRIM TO BSGENOME SEQLENGTHS - literally one peak -.-
 
 # Filter out bad peaks based on length
-peakwidths <- width(combined_peaks)
-combined_peaks <- combined_peaks[peakwidths < 10000 & peakwidths > 20]
-combined_peaks
-combined_peaks <- combined_peaks[!duplicated(combined_peaks), ]
-saveRDS(combined_peaks,
+peakwidths <- width(trimmed_peaks)
+trimmed_peaks <- trimmed_peaks[peakwidths < 10000 & peakwidths > 20]
+trimmed_peaks
+trimmed_peaks <- trimmed_peaks[!duplicated(trimmed_peaks), ]
+saveRDS(trimmed_peaks,
   file = "export/peaks/combined_5000b_peakset_gr.rds",
   compress = FALSE
 )
@@ -386,39 +394,41 @@ vln <- VlnPlot(
 )
 ggsave(vln, filename = paste0("export/combined_QC_violin.pdf"), width = 12, height = 8)
 combined <- BinarizeCounts(combined)
+combined <- ScaleData(combined, assay = "peaks", model.use = "negbinom")
 # remove features that are very low counts
 combined <- RunTFIDF(combined)
-combined <- FindTopFeatures(combined, min.cutoff = "q20")
-combined <- RunSVD(object = combined)
+combined <- FindTopFeatures(combined, min.cutoff = "q10")
+combined <- RunSVD(object = combined, n = 50, reduction.name = "lsi")
 DepthCor(combined)
 
+# Refine cluster resolution
 # Iterate here to find the best resolution
 combined <- RunUMAP(
   object = combined,
   reduction = "lsi",
-  dims = 2:30,
+  dims = 2:50,
+  n.neighbors = 30,
+  n.components = 2,
+  min.dist = 0.3,
 )
 combined <- FindNeighbors(
   object = combined,
   reduction = "lsi",
-  dims = 2:30
+  dims = 2:50,
 )
 combined <- FindClusters(
   object = combined,
   algorithm = 2,
   resolution = 0.5,
-  verbose = FALSE
+  verbose = FALSE,
+  group.singletons = TRUE,
+  cluster.name = "lsi_clusters0.5"
 )
-umap <- DimPlot(object = combined, label = TRUE, reduction = "umap") + NoLegend()
-ggsave(umap, filename = paste0("export/combined_postfilter_peak_lsi_clusters0.5_UMAP.pdf"), width = 8, height = 8)
-```
 
-```{r}
-umap <- DimPlot(object = combined, label = TRUE, group.by = "orig.ident", reduction = "umap") + NoLegend()
-ggsave(umap, filename = paste0("export/combined_postfilter_peak_lsi_2_orig.ident_UMAP.pdf"), width = 8, height = 8)
-```
-  
-  
-```{r}
+umap <- DimPlot(object = combined, label = TRUE, reduction = "umap")
+ggsave(umap, filename = paste0("export/combined_suerat_lsi_clusters0.5.pdf"), width = 8, height = 8)
+umap <- DimPlot(object = combined, label = TRUE, group.by = "orig.ident", reduction = "umap")
+ggsave(umap, filename = paste0("export/combined_suerat_lsi_clusters0.5_UMAP_orig.ident.pdf"), width = 8, height = 8)
+
 saveRDS(combined, file = "data/combined_seurat_obj.rds", compress = FALSE)
 ```

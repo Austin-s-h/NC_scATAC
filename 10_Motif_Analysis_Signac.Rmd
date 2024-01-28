@@ -1,0 +1,77 @@
+Motfi analysis using Signac
+-----------------------------------------------------------------------
+
+# FILEPATH: /workspaces/NC_scATAC/10_Motif_Analysis_Signac.Rmd
+
+## After experimenting with this, all integration removes too much and shouldn't really be used.
+
+```{r}
+library(renv)
+renv::activate()
+
+suppressPackageStartupMessages({
+  library(BSgenome.Ggallus.ENSEMBL.galGal6)
+  library(GenomicFeatures)
+  library(RMariaDB)
+  library(org.Gg.eg.db)
+  library(dplyr)
+  library(JASPAR2020)
+  library(Seurat) # 5
+  library(Signac) # develop >1.12.0
+  library(ggplot2)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(Biostrings)
+  library(Matrix) # 1.6.4
+  library(irlba)
+  library(TFBSTools)
+  library(patchwork)
+})
+options(future.globals.maxSize = 20 * 1024^3) # set to 20 Gb
+options(future.seed=TRUE)
+plan("multicore", workers = 24)
+ah <- AnnotationHub()
+qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
+EnsDb_gg6 <- ah[["AH67945"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+getSeq(BSgenome.Ggallus.ENSEMBL.galGal6, granges(seurat_obj))
+seurat_obj <- readRDS("data/combined_seurat_obj.rds")
+```
+
+```{r}
+# Get a list of motif position frequency matrices from the JASPAR database
+pfm <- getMatrixSet(
+  x = JASPAR2020,
+  opts = list(collection = "CORE", tax_group = 'vertebrates', all_versions = FALSE)
+)
+# Fixed after requantifying fragments on the BSGenome trimmed merged peak set.
+seurat_obj <- AddMotifs(
+  object = seurat_obj,
+  genome = BSgenome.Ggallus.ENSEMBL.galGal6,
+  pfm = pfm
+)
+seurat_obj <- RunChromVAR(
+  seurat_obj,
+  BSgenome.Ggallus.ENSEMBL.galGal6,
+  new.assay.name = "chromvar",
+  verbose = TRUE,
+)
+saveRDS(seurat_obj, "data/combined_seurat_obj_chromvar.rds", compress = FALSE)
+```
+
+Let's use the ChromVAR results to help annotate the new scATAC-all clusters.
+We already have a good idea of the expected cell types.
+The first step is to narrow the peaks we want to use to calculate Motif enrichment.
+
+Plot known motifs to label clusters in agreement with previous analysis.
+```{r}
+DimHeatmap(
+  object = seurat_obj,
+  dims = 2,
+  cells = 500,
+  balanced = TRUE,
+  reduction = "lsi",
+)
+
+```

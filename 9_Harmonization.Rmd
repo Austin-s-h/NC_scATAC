@@ -1,0 +1,90 @@
+Run Harmonization from a Seurat Object
+-----------------------------------------------------------------------
+
+# FILEPATH: /workspaces/NC_scATAC/9_Harmonization.Rmd
+
+## After experimenting with this, all integration removes too much and shouldn't really be used.
+
+```{r}
+library(renv)
+renv::activate()
+
+suppressPackageStartupMessages({
+  library(BSgenome.Ggallus.ENSEMBL.galGal6)
+  library(GenomicFeatures)
+  library(RMariaDB)
+  library(org.Gg.eg.db)
+  library(dplyr)
+  library(JASPAR2020)
+  library(Seurat) # 5
+  library(Signac) # develop >1.12.0
+  library(ggplot2)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(Biostrings)
+  library(Matrix) # 1.6.4
+  library(irlba)
+})
+options(future.globals.maxSize = 20 * 1024^3) # set to 20 Gb
+plan("multicore", workers = 24)
+ah <- AnnotationHub()
+qr <- query(ah, c("EnsDb", "gallus gallus", "95"))
+EnsDb_gg6 <- ah[["AH67945"]]
+# extract gene annotations from EnsDb
+annotations <- suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb_gg6))
+seurat_obj <- readRDS("data/combined_seurat_obj.rds")
+```
+
+
+```{r}
+# https://satijalab.org/seurat/articles/seurat5_integration
+seurat_obj <- readRDS("data/combined_seurat_obj.rds")
+seurat_obj[["peaks"]] <- split(seurat_obj[["peaks"]], f = seurat_obj$orig.ident)
+
+seurat_obj <- FindVariableFeatures(seurat_obj)
+seurat_obj <- ScaleData(seurat_obj)
+seurat_obj <- RunPCA(seurat_obj, npcs = 30)
+
+# After preprocessing, we integrate layers with added parameters specific to Harmony:
+seurat_obj <- IntegrateLayers(
+  object = seurat_obj, method = RPCAIntegration,
+  orig.reduction = "pca", new.reduction = "rpca", verbose = FALSE, theta = 3
+)
+
+DepthCor(seurat_obj, reduction = "rpca")
+# Looks like we have a ~0.25 correlation in harmony PC_3
+
+# # We can also add arguments specific to Harmony such as theta, to give more diverse clusters
+# seurat_obj <- IntegrateLayers(object = seurat_obj, method = HarmonyIntegration,
+#   orig.reduction = "pca",  new.reduction = 'harmony', verbose = FALSE, theta = 3)
+
+# # Integrating SCTransformed data
+# seurat_obj <- SCTransform(object = seurat_obj)
+# seurat_obj <- IntegrateLayers(object = seurat_obj, method = HarmonyIntegration,
+#   orig.reduction = "pca", new.reduction = 'harmony',
+#   assay = "SCT", verbose = FALSE)
+
+# Iterate here to find the best resolution
+seurat_obj <- RunUMAP(
+  object = seurat_obj,
+  reduction = "rpca",
+  dims = 2:30,
+)
+seurat_obj <- FindNeighbors(
+  object = seurat_obj,
+  reduction = "rpca",
+  dims = 2:30
+)
+seurat_obj <- FindClusters(
+  object = seurat_obj,
+  algorithm = 2,
+  resolution = 1,
+  verbose = FALSE
+)
+umap <- DimPlot(object = seurat_obj, label = TRUE, reduction = "umap")
+ggsave(umap, filename = paste0("export/seurat_obj_splitlayers_rpca_clusters1_UMAP.pdf"), width = 8, height = 8)
+```
+
+
+Look into https://docs.scvi-tools.org/en/stable/tutorials/notebooks/multimodal/MultiVI_tutorial.html
+seems very cool.
